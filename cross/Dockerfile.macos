@@ -1,40 +1,43 @@
-FROM ghcr.io/cross-rs/x86_64-apple-darwin:latest
+FROM ghcr.io/cross-rs/x86_64-apple-darwin:main
 
 RUN apt-get update && apt-get install -y \
-    curl xz-utils make gcc pkg-config \
+    curl xz-utils make nasm pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
 ENV MACOS_PREFIX=/usr/local/macos \
-    OSXCROSS=/usr/local/osxcross \
-    CC=o64-clang \
-    CXX=o64-clang++
+    OSXCROSS=/usr/local/osxcross
 
-RUN curl -L https://ffmpeg.org/releases/ffmpeg-7.1.tar.xz | tar xJ \
-    && cd ffmpeg-7.1 \
-    && ./configure \
-        --prefix=$MACOS_PREFIX \
-        --enable-cross-compile \
-        --arch=x86_64 \
-        --target-os=darwin \
-        --cross-prefix=x86_64-apple-darwin- \
-        --cc=$CC \
-        --cxx=$CXX \
-        --pkg-config=pkg-config \
-        --disable-programs \
-        --disable-doc \
-        --enable-static \
-        --disable-shared \
-        --disable-everything \
-        --enable-decoder='aac*,ac3*,alac*,ape,flac,mp3*,opus,pcm*,vorbis*,wavpack,wmav*,eac3' \
-        --enable-encoder='aac,pcm_s16le,flac,vorbis,mp3' \
-        --enable-muxer='mp3,mp4,wav,flac,ogg' \
-        --enable-demuxer='aac,ac3,ape,asf,avi,flac,flv,matroska,mov,mp3,mpegts,ogg,wav,webm' \
-        --enable-parser='aac,ac3,flac,mpegaudio,vorbis,opus' \
-        --enable-protocol=file \
-        --enable-bsf='aac_adtstoasc,mp3_header_decompress' \
-        --disable-debug \
-    && make -j$(nproc) install \
-    && cd .. && rm -rf ffmpeg-7.1
+RUN curl -L https://ffmpeg.org/releases/ffmpeg-7.1.tar.xz | tar xJ
+
+WORKDIR /ffmpeg-7.1
+
+RUN ./configure \
+    --prefix=$MACOS_PREFIX \
+    --enable-cross-compile \
+    --arch=x86_64 \
+    --target-os=darwin \
+    --cross-prefix=x86_64-apple-darwin- \
+    --cc=x86_64-apple-darwin-clang \
+    --cxx=x86_64-apple-darwin-clang++ \
+    --pkg-config=pkg-config \
+    --disable-programs \
+    --disable-doc \
+    --enable-static \
+    --disable-shared \
+    --enable-decoder='aac*,ac3*,alac*,ape,flac,mp3*,opus,pcm*,vorbis*,wavpack,wmav*,eac3' \
+    --enable-encoder='aac,pcm_s16le,flac,vorbis,mp3' \
+    --enable-muxer='mp3,mp4,wav,flac,ogg' \
+    --enable-demuxer='aac,ac3,ape,asf,avi,flac,flv,matroska,mov,mp3,mpegts,ogg,wav,webm' \
+    --enable-parser='aac,ac3,flac,mpegaudio,vorbis,opus' \
+    --enable-protocol=file \
+    --enable-bsf='aac_adtstoasc,mp3_header_decompress' \
+    --disable-asm \
+    --disable-debug
+
+RUN make -j$(nproc) install
+
+WORKDIR /
+RUN rm -rf /ffmpeg-7.1
 
 ENV PKG_CONFIG_ALLOW_CROSS=1 \
     PKG_CONFIG_PATH=$MACOS_PREFIX/lib/pkgconfig \
