@@ -1,0 +1,5 @@
+/target/
+/audiobooks/
+host/gen/
+host/icons/
+cli/target/

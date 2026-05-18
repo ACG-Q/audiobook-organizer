@@ -1,0 +1,24 @@
+{
+  "productName": "有声书工具集",
+  "version": "0.1.0",
+  "identifier": "com.audiobook-organizer.host",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "有声书工具集",
+        "width": 1100,
+        "height": 780,
+        "resizable": true,
+        "fullscreen": false,
+        "minWidth": 800,
+        "minHeight": 600
+      }
+    ]
+  }
+}
