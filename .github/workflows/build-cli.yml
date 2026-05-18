@@ -12,7 +12,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-all:
+  cross-build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,14 +28,12 @@ jobs:
         run: |
           docker build -t audiobook-cross:linux -f cross/Dockerfile.linux .
           docker build -t audiobook-cross:windows -f cross/Dockerfile.windows .
-          docker build -t audiobook-cross:macos -f cross/Dockerfile.macos .
 
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: |
             x86_64-unknown-linux-gnu
             x86_64-pc-windows-gnu
-            x86_64-apple-darwin
 
       - name: Install cross
         run: cargo install cross --git https://github.com/cross-rs/cross
@@ -58,11 +56,23 @@ jobs:
           path: target/x86_64-pc-windows-gnu/release/audiobook-*.exe
           compression-level: 0
 
+  macos-build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ffmpeg
+        run: brew install ffmpeg pkg-config
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-apple-darwin
+
       - name: Build macOS
-        run: cross build --release --target x86_64-apple-darwin -p audiobook-scanner -p audiobook-organizer -p audiobook-transcriber -p audiobook-splitter
+        run: cargo build --release -p audiobook-scanner -p audiobook-organizer -p audiobook-transcriber -p audiobook-splitter
 
       - uses: actions/upload-artifact@v4
         with:
           name: audiobook-cli-macos
-          path: target/x86_64-apple-darwin/release/audiobook-*
+          path: target/release/audiobook-*
           compression-level: 0
