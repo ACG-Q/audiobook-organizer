@@ -185,11 +185,12 @@ fn get_video_info(video: &std::path::Path) -> anyhow::Result<serde_json::Value> 
     let streams: Vec<serde_json::Value> = ictx.streams()
         .map(|s| {
             let codec = ffmpeg_next::codec::context::Context::from_parameters(s.parameters()).ok();
-            let codec_name = codec.as_ref().and_then(|c| c.id().name()).map(|s| s.to_string());
-            let codec_long = codec.as_ref().and_then(|c| Some(c.medium().to_string()));
+            let codec_name = codec.as_ref().map(|c| c.id().name()).map(|s| s.to_string());
+            let codec_long = codec.as_ref().map(|c| format!("{:?}", c.medium()));
+            let med_type = format!("{:?}", s.parameters().medium());
             serde_json::json!({
                 "index": s.index(),
-                "codec_type": s.media_type().to_string(),
+                "codec_type": med_type,
                 "codec_name": codec_name,
                 "codec_long_name": codec_long,
                 "time_base": s.time_base().to_string(),
@@ -207,27 +208,44 @@ fn get_video_info(video: &std::path::Path) -> anyhow::Result<serde_json::Value> 
     }))
 }
 
+fn drain_encoder_packets(
+    encoder: &mut ffmpeg_next::codec::encoder::audio::Encoder,
+    octx: &mut ffmpeg_next::format::context::Output,
+    out_tb: ffmpeg_next::Rational,
+) -> anyhow::Result<()> {
+    let mut out_pkt = ffmpeg_next::packet::Packet::empty();
+    loop {
+        match encoder.receive_packet(&mut out_pkt) {
+            Ok(()) => {
+                out_pkt.set_stream(0);
+                out_pkt.rescale_ts(encoder.time_base(), out_tb);
+                out_pkt.write_interleaved(octx)?;
+            }
+            Err(ffmpeg_next::Error::Other { errno }) if errno == libc::EAGAIN => {
+                return Ok(());
+            }
+            Err(e) => return Err(anyhow::anyhow!("Encode error: {e}")),
+        }
+    }
+}
+
 fn transcode_segment(
     input: &std::path::Path,
     output: &std::path::Path,
     start: Option<f64>,
     end: Option<f64>,
 ) -> anyhow::Result<()> {
-    use ffmpeg_next::{format, media, codec, encoder, frame, packet, software, ChannelLayout};
+    use ffmpeg_next::{format, media, codec, encoder, frame, packet, ChannelLayout};
 
     init_ffmpeg();
 
-    let mut ictx = format::input(&input)
-        .map_err(|e| anyhow::anyhow!("Cannot open input: {e}"))?;
-
+    let mut ictx = format::input(&input)?;
     let input_stream = ictx.streams().best(media::Type::Audio)
         .ok_or_else(|| anyhow::anyhow!("No audio stream found"))?;
     let audio_index = input_stream.index();
 
-    let mut decoder = codec::context::Context::from_parameters(input_stream.parameters())
-        .map_err(|e| anyhow::anyhow!("Cannot create decoder: {e}"))?
-        .decoder().audio()
-        .map_err(|e| anyhow::anyhow!("Cannot open decoder: {e}"))?;
+    let mut decoder = codec::context::Context::from_parameters(input_stream.parameters())?
+        .decoder().audio()?;
 
     let in_tb = input_stream.time_base();
 
@@ -236,13 +254,11 @@ fn transcode_segment(
         let _ = ictx.seek(seek_ts, ..seek_ts);
     }
 
-    let mut octx = format::output(&output)
-        .map_err(|e| anyhow::anyhow!("Cannot create output: {e}"))?;
+    let mut octx = format::output(&output)?;
 
-    let codec_id = octx.format().codec(&output, media::Type::Audio)
-        .ok_or_else(|| anyhow::anyhow!("No suitable codec for output format"))?;
+    let codec_id = octx.format().codec(&output, media::Type::Audio);
     let codec = encoder::find(codec_id)
-        .ok_or_else(|| anyhow::anyhow!("Encoder not found for codec {codec_id:?}"))?
+        .ok_or_else(|| anyhow::anyhow!("Encoder not found"))?
         .audio()?;
 
     let global = octx.format().flags()
@@ -251,10 +267,8 @@ fn transcode_segment(
     let mut ost = octx.add_stream(codec)?;
 
     {
-        let mut enc_ctx = codec::context::Context::from_parameters(ost.parameters())
-            .map_err(|e| anyhow::anyhow!("Cannot create encoder context: {e}"))?
-            .encoder().audio()
-            .map_err(|e| anyhow::anyhow!("Cannot open encoder: {e}"))?;
+        let mut enc_ctx = codec::context::Context::from_parameters(ost.parameters())?
+            .encoder().audio()?;
 
         enc_ctx.set_rate(decoder.rate() as i32);
 
@@ -276,19 +290,15 @@ fn transcode_segment(
         ost.set_parameters(&enc_ctx);
     }
 
-    let enc_params = ost.parameters();
-    let enc_ctx = codec::context::Context::from_parameters(enc_params)
-        .map_err(|e| anyhow::anyhow!("Cannot re-create encoder context: {e}"))?;
-    let mut encoder = enc_ctx.encoder().audio()
-        .map_err(|e| anyhow::anyhow!("Cannot open encoder for use: {e}"))?;
+    let mut encoder = codec::context::Context::from_parameters(ost.parameters())?
+        .encoder().audio()?;
 
     let out_tb = ost.time_base();
 
     octx.set_metadata(ictx.metadata().to_owned());
-    octx.write_header()
-        .map_err(|e| anyhow::anyhow!("Failed to write header: {e}"))?;
+    octx.write_header()?;
 
-    for (stream, mut packet) in ictx.packets() {
+    for (stream, packet) in ictx.packets() {
         if stream.index() != audio_index { continue; }
 
         if let Some(e) = end {
@@ -299,64 +309,29 @@ fn transcode_segment(
         }
 
         let _ = decoder.send_packet(&packet);
-        let mut frame = frame::Audio::empty();
+        let mut dec_frame = frame::Audio::empty();
         loop {
-            match decoder.receive_frame(&mut frame) {
+            match decoder.receive_frame(&mut dec_frame) {
                 Ok(()) => {
-                    let _ = encoder.send_frame(&frame);
-                    let mut out_pkt = packet::Packet::empty(0);
-                    loop {
-                        match encoder.receive_packet(&mut out_pkt) {
-                            Ok(true) => {
-                                out_pkt.rescale_ts(encoder.time_base(), out_tb);
-                                out_pkt.write_interleaved(&mut octx)
-                                    .map_err(|e| anyhow::anyhow!("Write error: {e}"))?;
-                            }
-                            Ok(false) => break,
-                            Err(e) => return Err(anyhow::anyhow!("Encode error: {e}")),
-                        }
-                    }
+                    let _ = encoder.send_frame(&dec_frame);
+                    drain_encoder_packets(&mut encoder, &mut octx, out_tb)?;
                 }
-                Err(ffmpeg_next::Error::EAGAIN) => break,
-                Err(e) => return Err(anyhow::anyhow!("Decode error: {e}")),
+                Err(_) => break,
             }
         }
     }
 
-    let _ = decoder.send_packet(&packet::Packet::empty(0));
-    let mut frame = frame::Audio::empty();
-    while decoder.receive_frame(&mut frame).is_ok() {
-        let _ = encoder.send_frame(&frame);
-        let mut out_pkt = packet::Packet::empty(0);
-        loop {
-            match encoder.receive_packet(&mut out_pkt) {
-                Ok(true) => {
-                    out_pkt.rescale_ts(encoder.time_base(), out_tb);
-                    out_pkt.write_interleaved(&mut octx)
-                        .map_err(|e| anyhow::anyhow!("Write error: {e}"))?;
-                }
-                Ok(false) => break,
-                Err(e) => return Err(anyhow::anyhow!("Encode error: {e}")),
-            }
-        }
+    let _ = decoder.send_packet(&packet::Packet::empty());
+    let mut dec_frame = frame::Audio::empty();
+    while decoder.receive_frame(&mut dec_frame).is_ok() {
+        let _ = encoder.send_frame(&dec_frame);
+        drain_encoder_packets(&mut encoder, &mut octx, out_tb)?;
     }
 
     let _ = encoder.send_frame(&frame::Audio::empty());
-    let mut out_pkt = packet::Packet::empty(0);
-    loop {
-        match encoder.receive_packet(&mut out_pkt) {
-            Ok(true) => {
-                out_pkt.rescale_ts(encoder.time_base(), out_tb);
-                out_pkt.write_interleaved(&mut octx)
-                    .map_err(|e| anyhow::anyhow!("Write error: {e}"))?;
-            }
-            Ok(false) => break,
-            Err(e) => return Err(anyhow::anyhow!("Flush encode error: {e}")),
-        }
-    }
+    drain_encoder_packets(&mut encoder, &mut octx, out_tb)?;
 
-    octx.write_trailer()
-        .map_err(|e| anyhow::anyhow!("Failed to write trailer: {e}"))?;
+    octx.write_trailer()?;
     Ok(())
 }
 
