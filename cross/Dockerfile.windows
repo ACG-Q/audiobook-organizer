@@ -1,5 +1,38 @@
 FROM ghcr.io/cross-rs/x86_64-pc-windows-gnu:latest
 
-RUN pacman -Syu --noconfirm mingw-w64-x86_64-ffmpeg mingw-w64-x86_64-pkg-config
+RUN apt-get update && apt-get install -y \
+    curl xz-utils make pkg-config \
+    && rm -rf /var/lib/apt/lists/*
 
-ENV PKG_CONFIG_ALLOW_CROSS=1
+ENV WIN_PREFIX=/usr/local/win64
+
+RUN curl -L https://ffmpeg.org/releases/ffmpeg-7.1.tar.xz | tar xJ \
+    && cd ffmpeg-7.1 \
+    && ./configure \
+        --prefix=$WIN_PREFIX \
+        --enable-cross-compile \
+        --cross-prefix=x86_64-w64-mingw32- \
+        --target-os=mingw32 \
+        --arch=x86_64 \
+        --cc=x86_64-w64-mingw32-gcc \
+        --cxx=x86_64-w64-mingw32-g++ \
+        --pkg-config=pkg-config \
+        --disable-programs \
+        --disable-doc \
+        --enable-static \
+        --disable-shared \
+        --disable-everything \
+        --enable-decoder='aac*,ac3*,alac*,ape,flac,mp3*,opus,pcm*,vorbis*,wavpack,wmav*,eac3' \
+        --enable-encoder='aac,pcm_s16le,flac,vorbis,mp3' \
+        --enable-muxer='mp3,mp4,wav,flac,ogg' \
+        --enable-demuxer='aac,ac3,ape,asf,avi,flac,flv,matroska,mov,mp3,mpegts,ogg,wav,webm' \
+        --enable-parser='aac,ac3,flac,mpegaudio,vorbis,opus' \
+        --enable-protocol=file \
+        --enable-bsf='aac_adtstoasc,mp3_header_decompress' \
+        --disable-debug \
+    && make -j$(nproc) install \
+    && cd .. && rm -rf ffmpeg-7.1
+
+ENV PKG_CONFIG_ALLOW_CROSS=1 \
+    PKG_CONFIG_PATH=$WIN_PREFIX/lib/pkgconfig \
+    PKG_CONFIG_SYSROOT_DIR=$WIN_PREFIX
