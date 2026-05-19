@@ -3,3 +3,9 @@ image = "audiobook-cross:linux"
 
 [target.x86_64-pc-windows-gnu]
 image = "audiobook-cross:windows"
+
+[target.x86_64-apple-darwin]
+image = "audiobook-cross:macos"
+
+[target.aarch64-apple-darwin]
+image = "audiobook-cross:macos-aarch64"
