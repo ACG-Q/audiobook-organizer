@@ -6,6 +6,22 @@ pub enum MetadataError {
     Other(String),
 }
 
+#[must_use]
+pub fn is_cross_device_error(e: &std::io::Error) -> bool {
+    #[cfg(target_os = "linux")]
+    {
+        matches!(e.raw_os_error(), Some(18)) // EXDEV
+    }
+    #[cfg(target_os = "macos")]
+    {
+        matches!(e.raw_os_error(), Some(18)) // EXDEV
+    }
+    #[cfg(windows)]
+    {
+        matches!(e.raw_os_error(), Some(17)) // ERROR_NOT_SAME_DEVICE = 0x11
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum TemplateError {
     #[error("template error: {0}")]

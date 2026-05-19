@@ -5,6 +5,14 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 description = "Extract audio from video and split by chapters or time segments"
 
+[lib]
+name = "audiobook_splitter"
+path = "src/lib.rs"
+
+[[bin]]
+name = "audiobook-splitter"
+path = "src/main.rs"
+
 [dependencies]
 audiobook-organizer-core = { path = "../core" }
 clap = { version = "4", features = ["derive"] }

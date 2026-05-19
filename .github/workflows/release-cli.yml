@@ -1,12 +1,9 @@
-name: Build CLI Tools
+name: Release CLI Tools
 
 on:
   push:
-    branches: [main]
-    paths:
-      - "cli/**"
-      - ".github/workflows/build-cli.yml"
-  workflow_dispatch:
+    tags:
+      - "cli-v*"
 
 jobs:
   check:
@@ -48,11 +45,14 @@ jobs:
           sudo apt-get install -y libavformat-dev libavcodec-dev libavutil-dev libswresample-dev libswscale-dev pkg-config
       - name: Build all
         run: cargo build --release --target x86_64-unknown-linux-gnu
+      - name: Package binaries
+        run: |
+          cd target/x86_64-unknown-linux-gnu/release
+          tar czf audiobook-cli-linux.tar.gz audiobook-scanner audiobook-organizer audiobook-transcriber audiobook-splitter
       - uses: actions/upload-artifact@v4
         with:
           name: audiobook-cli-linux
-          path: cli/target/x86_64-unknown-linux-gnu/release/audiobook-*
-          compression-level: 0
+          path: cli/target/x86_64-unknown-linux-gnu/release/audiobook-cli-linux.tar.gz
 
   build-windows:
     runs-on: windows-latest
@@ -67,13 +67,17 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: cli
-      - name: Build (skip splitter due to ffmpeg dep)
+      - name: Build
         run: cargo build --release --target x86_64-pc-windows-msvc -p audiobook-organizer-core -p audiobook-scanner -p audiobook-organizer -p audiobook-transcriber
+      - name: Package binaries
+        shell: pwsh
+        run: |
+          cd cli/target/x86_64-pc-windows-msvc/release
+          Compress-Archive -Path audiobook-scanner.exe,audiobook-organizer.exe,audiobook-transcriber.exe -DestinationPath audiobook-cli-windows.zip
       - uses: actions/upload-artifact@v4
         with:
           name: audiobook-cli-windows
-          path: cli/target/x86_64-pc-windows-msvc/release/audiobook-*.exe
-          compression-level: 0
+          path: cli/target/x86_64-pc-windows-msvc/release/audiobook-cli-windows.zip
 
   build-macos:
     strategy:
@@ -98,8 +102,28 @@ jobs:
         run: brew install ffmpeg pkg-config
       - name: Build all
         run: cargo build --release --target ${{ matrix.target }}
+      - name: Package binaries
+        run: |
+          cd target/${{ matrix.target }}/release
+          tar czf audiobook-cli-${{ matrix.target }}.tar.gz audiobook-scanner audiobook-organizer audiobook-transcriber audiobook-splitter
       - uses: actions/upload-artifact@v4
         with:
           name: audiobook-cli-${{ matrix.target }}
-          path: cli/target/${{ matrix.target }}/release/audiobook-*
-          compression-level: 0
+          path: cli/target/${{ matrix.target }}/release/audiobook-cli-${{ matrix.target }}.tar.gz
+
+  release:
+    needs: [check, build-linux, build-windows, build-macos]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            audiobook-cli-linux/audiobook-cli-linux.tar.gz
+            audiobook-cli-windows/audiobook-cli-windows.zip
+            audiobook-cli-x86_64-apple-darwin/audiobook-cli-x86_64-apple-darwin.tar.gz
+            audiobook-cli-aarch64-apple-darwin/audiobook-cli-aarch64-apple-darwin.tar.gz
+          generate_release_notes: true

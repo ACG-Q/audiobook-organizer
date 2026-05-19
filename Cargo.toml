@@ -1,8 +1,0 @@
-[workspace]
-members = ["cli/core", "cli/scanner", "cli/organizer", "cli/transcriber", "cli/splitter", "host/src-tauri"]
-resolver = "2"
-
-[profile.release]
-lto = true
-codegen-units = 1
-strip = true

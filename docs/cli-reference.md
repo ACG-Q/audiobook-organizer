@@ -1,5 +1,27 @@
 # CLI 工具参考
 
+## 构建
+
+所有 CLI 工具使用 Cargo workspace 管理：
+
+```bash
+# 构建所有 CLI 工具
+cd cli
+cargo build --release
+
+# 构建单个工具
+cargo build --release -p audiobook-scanner
+cargo build --release -p audiobook-organizer
+cargo build --release -p audiobook-transcriber
+cargo build --release -p audiobook-splitter
+
+# 构建 transcriber（启用 Whisper）
+cargo build --release -p audiobook-transcriber --features whisper-rs
+
+# 运行测试
+cargo test
+```
+
 ## 环境变量
 
 ### AUDIOBOOK_LANG
@@ -11,13 +33,11 @@ export AUDIOBOOK_LANG=zh   # Linux/macOS
 $env:AUDIOBOOK_LANG="zh"   # Windows PowerShell
 ```
 
-支持的值：`zh`、`ja`、`en` 等 BCP-47 语言标签。
+支持的值：`zh`、`en` 等语言代码。
 
 影响范围：
-- **core**：模板渲染的日期格式
-- **scanner**：元数据编码检测
+- **所有 CLI 工具**：帮助文本语言（中文/英文）
 - **transcriber**：默认识别语言
-- **host**：界面语言
 
 ## scanner
 
@@ -139,9 +159,10 @@ transcriber model <COMMAND>
 
 ### 注意
 
-默认编译不启用 whisper-rs（避免庞大的依赖和 CUDA 工具链），此时 transcriber 输出占位结果：
+默认编译不启用 whisper-rs（避免庞大的依赖和 CUDA 工具链）：
 
 ```bash
+cd cli
 cargo build --release -p audiobook-transcriber --features whisper-rs
 ```
 
@@ -172,19 +193,19 @@ organizer [OPTIONS] <SOURCE> <DEST>
 
 | 变量 | 说明 |
 |------|------|
-| `{{title}}` | 标题 |
+| `{{title}}` | 标题（缺失默认为"unknown"） |
 | `{{artist}}` | 作者/艺术家 |
 | `{{album}}` | 专辑 |
 | `{{date}}` | 日期 |
 | `{{track}}` | 音轨号 |
+| `{{disc}}` | 碟号 |
+| `{{genre}}` | 流派 |
 | `{{ext}}` | 文件扩展名 |
-| `{{filename}}` | 原始文件名（不含扩展名） |
-| `{{path}}` | 原始相对路径 |
-| `{{bitrate}}` | 比特率 |
+| `{{name}}` | 原始文件名（不含扩展名） |
+| `{{stem}}` | 原始文件名（不含扩展名，同 `name`） |
 | `{{duration}}` | 时长（秒） |
-| `{{sample_rate}}` | 采样率 |
-| `{{language}}` | 语言 |
-| `{{channels}}` | 声道数 |
+
+支持 `{{format field "02"}}` 辅助函数进行数字补零（例如 `{{format track "02"}}` → `03`）。
 
 ### 示例
 

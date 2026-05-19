@@ -50,8 +50,9 @@
 4 个独立 CLI 二进制程序，使用 `clap` 解析命令行参数。设计原则：
 
 - **独立可执行**：每个工具可单独使用，不依赖其他工具
-- **统一接口**：均支持 `--stream` 参数（JSON Lines 格式输出）
+- **统一接口**：均支持 `--stream` 参数（JSON Lines 格式输出，通过 `StreamEvent` 枚举保证协议一致性）
 - **共享类型**：通过 `core` 库共享数据结构（`AudioMetadata`、模板、i18n）
+- **CLI 框架**：使用 `run_cli!` 宏统一入口样板（clap 初始化、语言检测、错误处理）
 - **环境变量**：通过 `AUDIOBOOK_LANG` 统一设置语言
 
 ### scanner
@@ -105,19 +106,22 @@ cargo build --release -p audiobook-transcriber --features whisper-rs
 用法: organizer <SOURCE> <DEST> --template <TEMPLATE> [--dry-run] [--threads <N>] [--stream]
 ```
 
-内置模板变量：`title`、`artist`、`album`、`date`、`track`、`ext`、`filename`、`path`、`bitrate`、`duration`、`sample_rate`、`language`、`channels`。
+内置模板变量：`title`、`artist`、`album`、`date`、`track`、`ext`、`name`、`stem`、`duration`。
 
 ## GUI 层（上位机）
 
 基于 Tauri 2.0 的桌面应用。架构分为三层：
 
-### 前端 (host/frontend/)
+### 前端 (host/src/)
 
-纯 HTML/CSS/JavaScript，无框架依赖。
+React 19 + TypeScript，使用 Vite 8 构建。
 
-- `index.html`：主界面（文件表格、工具栏、底部状态栏）
-- `style.css`：深色主题样式（~11KB）
-- `app.js`：状态管理、IPC 调用、事件监听（~16KB）
+- `pages/MainPage.tsx`：主页面（文件表格、日志面板）
+- `pages/SettingsPage.tsx`：设置页面
+- `components/`：FileTable、ProgressBar、Modal、EmptyState 等 UI 组件
+- `hooks/`：useLog、useFiles、usePipeline 等状态管理 hook
+- `ipc.ts`：Tauri IPC invoke 包装器
+- `App.css` + `design-tokens.css`：完整应用样式（深色/浅色主题）
 
 ### 后端 (host/src/)
 
@@ -141,7 +145,7 @@ Rust Tauri 命令 + 状态管理。
 | 层 | 技术 |
 |----|------|
 | GUI 框架 | Tauri 2.0 |
-| 前端 | HTML5 + CSS3 + Vanilla JS |
+| 前端 | React 19 + TypeScript + Vite 8 |
 | 后端 | Rust + serde + walkdir |
 | CLI | clap 4 |
 | 音频元数据 | symphonia |

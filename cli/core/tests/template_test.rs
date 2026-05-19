@@ -17,8 +17,8 @@ fn test_basic_template_render() {
 #[test]
 fn test_padding_format() {
     let meta = AudioMetadata { track: Some(3), ..Default::default() };
-    let result = render("{{format track \"03\"}} - {{title}}", &meta).unwrap();
-    assert_eq!(result, "003 - unknown");
+    let result = render("{{format track \"02\"}} - {{title}}", &meta).unwrap();
+    assert_eq!(result, "03 - unknown");
 }
 
 #[test]

@@ -1,7 +1,9 @@
 use std::path::PathBuf;
 
-use audiobook_organizer_core::i18n::{detect_lang, Lang};
-use clap::{CommandFactory, FromArgMatches, Parser};
+use audiobook_organizer_core::i18n::Lang;
+use audiobook_organizer_core::stream::{Emit, StreamEvent};
+use audiobook_organizer_core::run_cli;
+use clap::Parser;
 
 mod scan;
 use scan::scan;
@@ -15,33 +17,21 @@ struct Cli {
 }
 
 fn main() -> anyhow::Result<()> {
-    let lang = detect_lang();
+    run_cli!(Cli, translate, |cli: Cli| run(cli))
+}
 
-    let mut cmd = Cli::command();
-    cmd = translate(cmd, &lang);
-    let matches = cmd
-        .try_get_matches_from_mut(std::env::args())
-        .unwrap_or_else(|e| e.exit());
-    let cli = Cli::from_arg_matches(&matches).unwrap_or_else(|e| e.exit());
-
+fn run(cli: Cli) -> anyhow::Result<()> {
     if cli.stream {
-        let event = serde_json::json!({"type":"start","path":cli.path.display().to_string()});
-        println!("{event}");
+        StreamEvent::<String>::Start { data: cli.path.display().to_string() }.emit();
     }
 
     let files = scan(&cli.path)?;
 
     if cli.stream {
         for f in &files {
-            let event = serde_json::json!({
-                "type":"file",
-                "path":f.path.display().to_string(),
-                "metadata":f.metadata
-            });
-            println!("{event}");
+            StreamEvent::Item { data: f.clone() }.emit();
         }
-        let event = serde_json::json!({"type":"done","total":files.len()});
-        println!("{event}");
+        StreamEvent::Done { summary: serde_json::json!({"total": files.len()}) }.emit();
     } else {
         println!("{}", serde_json::to_string_pretty(&files)?);
     }

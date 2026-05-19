@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Default)]
@@ -60,23 +60,4 @@ pub struct Transcript {
     pub language: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Config {
-    pub template: String,
-    pub output_dir: PathBuf,
-    pub threads: usize,
-    pub model: Option<String>,
-    pub language: String,
-}
 
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            template: "{{artist}}/{{album}}/{{format track \"02\"}} - {{title}}.{{ext}}".into(),
-            output_dir: PathBuf::from("."),
-            threads: 4,
-            model: None,
-            language: "zh".into(),
-        }
-    }
-}

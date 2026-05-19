@@ -52,11 +52,17 @@ fn format_helper(
     let rendered = match value {
         handlebars::JsonValue::Number(n) => {
             let num: u64 = n.as_u64().unwrap_or(0);
-            if let Ok(width) = width_spec.parse::<usize>() {
-                format!("{num:0>width$}")
-            } else {
-                num.to_string()
-            }
+                    let stripped = width_spec.trim_start_matches('0');
+                    let width: usize = if stripped.is_empty() {
+                        width_spec.len()
+                    } else {
+                        stripped.parse().unwrap_or(0)
+                    };
+                    if width > 0 {
+                        format!("{num:0>width$}")
+                    } else {
+                        num.to_string()
+                    }
         }
         _ => value.to_string(),
     };

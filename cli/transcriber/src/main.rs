@@ -1,9 +1,12 @@
 use std::io::Write;
 use std::path::PathBuf;
 
-use audiobook_organizer_core::i18n::{detect_lang, Lang};
+use audiobook_organizer_core::i18n::Lang;
 use audiobook_organizer_core::model::{list_models, model_path};
-use clap::{CommandFactory, FromArgMatches, Parser, Subcommand};
+use audiobook_organizer_core::run_cli;
+use audiobook_organizer_core::stream::Emit;
+use audiobook_organizer_core::StreamEvent;
+use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
 #[command(name = "transcriber")]
@@ -14,23 +17,11 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    #[cfg(feature = "whisper-rs")]
     Transcribe {
         path: PathBuf,
         #[arg(short, long, default_value = "large-v3-turbo")]
         model: String,
         #[arg(short, long, default_value = "zh")]
-        lang: String,
-        #[arg(long)]
-        stream: bool,
-    },
-    #[cfg(not(feature = "whisper-rs"))]
-    #[command(hide = true)]
-    Transcribe {
-        path: PathBuf,
-        #[arg(short, long)]
-        model: String,
-        #[arg(short, long)]
         lang: String,
         #[arg(long)]
         stream: bool,
@@ -55,133 +46,137 @@ enum ModelCommands {
 }
 
 fn main() -> anyhow::Result<()> {
-    let lang = detect_lang();
-
-    let mut cmd = Cli::command();
-    cmd = translate(cmd, &lang);
-    let matches = cmd
-        .try_get_matches_from_mut(std::env::args())
-        .unwrap_or_else(|e| e.exit());
-    let cli = Cli::from_arg_matches(&matches).unwrap_or_else(|e| e.exit());
-
-    match cli.command {
-        #[cfg(feature = "whisper-rs")]
-        Commands::Transcribe {
-            path,
-            model,
-            lang,
-            stream,
-        } => {
-            let model_dir = dirs::data_dir()
-                .unwrap_or_default()
-                .join("audiobook-organizer/models");
-            let model_path = model_dir.join(&model);
-
-            if stream {
-                let event = serde_json::json!({
-                    "type":"start",
-                    "file":path.display().to_string(),
-                    "model":model
-                });
-                println!("{event}");
-            }
-
-            let ctx = audiobook_transcriber::WhisperContext::from_path(model_path)?;
-            let transcript =
-                audiobook_transcriber::transcribe(&ctx, &path, Some(lang.as_str()))?;
-
-            if stream {
-                for (start, end, text) in &transcript.segments {
-                    let event = serde_json::json!({
-                        "type":"segment",
-                        "start":start,
-                        "end":end,
-                        "text":text
-                    });
-                    println!("{event}");
+    run_cli!(Cli, translate, |cli: Cli| {
+        match cli.command {
+            Commands::Transcribe {
+                path: _path,
+                model: _model,
+                lang: _lang,
+                stream: _stream,
+            } => {
+                #[cfg(feature = "whisper-rs")]
+                return handle_transcribe(_path, _model, _lang, _stream);
+                #[cfg(not(feature = "whisper-rs"))]
+                {
+                    eprintln!("Transcription requires the whisper-rs feature. Rebuild with --features whisper-rs");
+                    std::process::exit(1);
                 }
-                let event = serde_json::json!({
-                    "type":"done",
-                    "text":transcript.text,
-                    "language":transcript.language
-                });
-                println!("{event}");
-            } else {
-                println!("{}", serde_json::to_string_pretty(&transcript)?);
             }
+            Commands::Model { command } => handle_model(command),
         }
-        #[cfg(not(feature = "whisper-rs"))]
-        Commands::Transcribe { .. } => {
-            eprintln!(
-                "Transcription requires the whisper-rs feature. Rebuild with --features whisper-rs"
-            );
+    })
+}
+
+#[cfg(feature = "whisper-rs")]
+fn handle_transcribe(path: PathBuf, model: String, lang: String, stream: bool) -> anyhow::Result<()> {
+    let model_dir = dirs::data_dir()
+        .unwrap_or_default()
+        .join("audiobook-organizer/models");
+    let model_path = model_dir.join(&model);
+
+    if stream {
+        StreamEvent::Start {
+            data: serde_json::json!({
+                "file": path.display().to_string(),
+                "model": model,
+            }),
         }
-        Commands::Model { command } => match command {
-            ModelCommands::List => {
-                let models = list_models()?;
-                println!("{}", serde_json::to_string_pretty(&models)?);
-            }
-            ModelCommands::Download { name, stream } => {
-                let dest = model_path(&name);
-                if let Some(parent) = dest.parent() {
-                    std::fs::create_dir_all(parent)?;
-                }
-                let url = format!(
-                    "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-{}.bin",
-                    name
-                );
-
-                if stream {
-                    let event = serde_json::json!({
-                        "type":"download_start",
-                        "name":name,
-                        "url":url
-                    });
-                    println!("{event}");
-                }
-
-                eprintln!("Downloading {} → {:?}", url, dest);
-                let resp = ureq::get(&url).call()?;
-                let total = resp
-                    .header("Content-Length")
-                    .and_then(|v| v.parse::<u64>().ok())
-                    .unwrap_or(0);
-                let mut reader = resp.into_reader();
-                let mut out = std::fs::File::create(dest)?;
-                let mut downloaded: u64 = 0;
-                let mut buf = [0u8; 65536];
-
-                loop {
-                    let n = std::io::Read::read(&mut reader, &mut buf)?;
-                    if n == 0 {
-                        break;
-                    }
-                    out.write_all(&buf[..n])?;
-                    downloaded += n as u64;
-
-                    if stream && total > 0 {
-                        let pct = (downloaded as f64 / total as f64) * 100.0;
-                        let event = serde_json::json!({
-                            "type":"download_progress",
-                            "bytes_downloaded":downloaded,
-                            "total_bytes":total,
-                            "percentage":format!("{:.1}", pct)
-                        });
-                        println!("{event}");
-                    }
-                }
-
-                if stream {
-                    let event = serde_json::json!({"type":"done"});
-                    println!("{event}");
-                }
-            }
-            ModelCommands::Path { name } => {
-                println!("{}", model_path(&name).display());
-            }
-        },
+        .emit();
     }
 
+    let ctx = audiobook_transcriber::WhisperContext::from_path(model_path)?;
+    let transcript = audiobook_transcriber::transcribe(&ctx, &path, Some(lang.as_str()))?;
+
+    if stream {
+        for (start, end, text) in &transcript.segments {
+            StreamEvent::Item {
+                data: serde_json::json!({
+                    "start": start,
+                    "end": end,
+                    "text": text,
+                }),
+            }
+            .emit();
+        }
+        StreamEvent::Done {
+            summary: serde_json::json!({
+                "text": transcript.text,
+                "language": transcript.language,
+            }),
+        }
+        .emit();
+    } else {
+        println!("{}", serde_json::to_string_pretty(&transcript)?);
+    }
+
+    Ok(())
+}
+
+fn handle_model(command: ModelCommands) -> anyhow::Result<()> {
+    match command {
+        ModelCommands::List => {
+            let models = list_models()?;
+            println!("{}", serde_json::to_string_pretty(&models)?);
+        }
+        ModelCommands::Download { name, stream } => {
+            let dest = model_path(&name);
+            if let Some(parent) = dest.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            let url = format!(
+                "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-{}.bin",
+                name
+            );
+
+            if stream {
+                StreamEvent::Start {
+                    data: serde_json::json!({
+                        "name": name,
+                        "url": url,
+                    }),
+                }
+                .emit();
+            }
+
+            eprintln!("Downloading {} -> {:?}", url, dest);
+            let resp = ureq::get(&url).call()?;
+            let total = resp
+                .header("Content-Length")
+                .and_then(|v| v.parse::<u64>().ok())
+                .unwrap_or(0);
+            let mut reader = resp.into_reader();
+            let mut out = std::fs::File::create(dest)?;
+            let mut downloaded: u64 = 0;
+            let mut buf = [0u8; 65536];
+
+            loop {
+                let n = std::io::Read::read(&mut reader, &mut buf)?;
+                if n == 0 {
+                    break;
+                }
+                out.write_all(&buf[..n])?;
+                downloaded += n as u64;
+
+                if stream && total > 0 {
+                    StreamEvent::<serde_json::Value>::Progress {
+                        current: downloaded as usize,
+                        total: total as usize,
+                    }
+                    .emit();
+                }
+            }
+
+            if stream {
+                StreamEvent::Done {
+                    summary: serde_json::json!({}),
+                }
+                .emit();
+            }
+        }
+        ModelCommands::Path { name } => {
+            println!("{}", model_path(&name).display());
+        }
+    }
     Ok(())
 }
 
