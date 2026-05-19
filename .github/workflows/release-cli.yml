@@ -3,7 +3,7 @@ name: Release CLI Tools
 on:
   push:
     tags:
-      - "cli-v*"
+      - "v*"
 
 jobs:
   check:
