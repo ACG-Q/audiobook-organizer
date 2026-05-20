@@ -2,4 +2,7 @@
 /audiobooks/
 host/gen/
 host/icons/
+host/node_modules/
+host/dist/
+host/src-tauri/target/
 cli/target/

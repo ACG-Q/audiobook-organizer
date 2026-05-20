@@ -171,9 +171,14 @@ function FileRow({ file, checked, onCheck, onContext }: FileRowProps) {
         <td className="col-split">{splitDisp}</td>
         <td className="col-trans">{transDisp}</td>
         <td className="col-rename">
-          <span className="cell-truncate">
-            {file.rename_preview || <span className="text-muted">─</span>}
-          </span>
+          {file.rename_preview ? (
+            <span className="cell-truncate">
+              <span className="rename-arrow">→</span>
+              <span className="rename-path">{file.rename_preview}</span>
+            </span>
+          ) : (
+            <span className="text-muted">─</span>
+          )}
         </td>
         <td className="col-progress">
           <ProgressBar progress={file.progress} />

@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::sync::Mutex;
 
 use tauri::{Emitter, State};
@@ -181,6 +182,10 @@ pub fn split_video(
     }
 }
 
+fn normalize_path(p: &str) -> String {
+    p.replace('\\', "/")
+}
+
 #[tauri::command]
 pub fn organize(
     app_handle: tauri::AppHandle,
@@ -190,15 +195,37 @@ pub fn organize(
     dest: String,
     dry_run: bool,
 ) -> Result<(), String> {
-    let source = ".";
+    let source = {
+        let app = state.lock().map_err(|e| e.to_string())?;
+        let files = app.get_files();
+        let first = ids.iter().find_map(|id| files.iter().find(|f| f.id == *id));
+        match first {
+            Some(f) => {
+                let p = Path::new(&f.path);
+                p.parent().map(|d| d.to_string_lossy().to_string()).unwrap_or_else(|| ".".to_string())
+            }
+            None => ".".to_string(),
+        }
+    };
+
+    emit_log(&app_handle, &format!("Organizing files from: {} to: {}", source, dest), "info");
     let cancel = state.lock().map_err(|e| e.to_string())?.cancel_flag(ids[0]);
-    emit_log(&app_handle, &format!("Organizing files to: {}", dest), "info");
-    let result = process::spawn_organizer(source, &dest, &template, dry_run, cancel.unwrap());
-    match &result {
-        Ok(_) => emit_log(&app_handle, "Organize complete", "info"),
-        Err(e) => emit_log(&app_handle, &format!("Organize failed: {}", e), "error"),
+    let items = process::spawn_organizer(&source, &dest, &template, dry_run, cancel.unwrap())?;
+
+    if dry_run {
+        let mut app = state.lock().map_err(|e| e.to_string())?;
+        let norm_items: Vec<(String, String)> = items.iter().map(|i| (normalize_path(&i.source), i.dest.clone())).collect();
+        for item in &norm_items {
+            for file in app.get_files_mut() {
+                if ids.contains(&file.id) && normalize_path(&file.path) == item.0 {
+                    file.rename_preview = Some(item.1.clone());
+                }
+            }
+        }
     }
-    result
+
+    emit_log(&app_handle, "Organize complete", "info");
+    Ok(())
 }
 
 #[tauri::command]

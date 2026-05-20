@@ -108,6 +108,10 @@ impl AppState {
         self.files.iter_mut().find(|f| f.id == id)
     }
 
+    pub fn get_files_mut(&mut self) -> &mut Vec<FileEntry> {
+        &mut self.files
+    }
+
     pub fn set_active(&mut self, ids: Vec<u64>) {
         self.active_ids = ids;
         for &id in &self.active_ids {

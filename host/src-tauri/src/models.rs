@@ -85,3 +85,9 @@ pub struct LogPayload {
     pub message: String,
     pub level: String,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OrganizeItem {
+    pub source: String,
+    pub dest: String,
+}

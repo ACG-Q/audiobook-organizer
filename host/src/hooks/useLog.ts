@@ -5,7 +5,13 @@ export function useLog() {
   const logRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight
+    if (logRef.current) {
+      const el = logRef.current
+      const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40
+      if (atBottom) {
+        el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+      }
+    }
   }, [logs])
 
   const addLog = useCallback((msg: string) => {

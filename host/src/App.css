@@ -35,6 +35,41 @@
   display: flex;
 }
 
+/* ===== Animations ===== */
+@keyframes slideInRow {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes highlightFade {
+  0% { background: var(--accent-subtle); }
+  100% { background: transparent; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.3); }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 /* ===== Buttons ===== */
 .btn {
   display: inline-flex;
@@ -213,7 +248,8 @@
 }
 
 .file-table tbody tr {
-  transition: background var(--transition);
+  transition: background var(--transition), opacity 200ms ease, transform 200ms ease;
+  animation: slideInRow 200ms var(--ease-out) both;
 }
 
 .file-table tbody tr:hover {
@@ -241,6 +277,17 @@
 .col-split { width: 12%; }
 .col-trans { width: 15%; }
 .col-rename { width: 15%; }
+
+.col-rename .rename-path {
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.col-rename .rename-arrow {
+  color: var(--text-muted);
+  margin: 0 2px;
+}
 .col-progress { width: 12%; }
 .col-status { width: 8%; }
 
@@ -365,18 +412,6 @@
 .status-error { color: var(--error); }
 .status-cancelled { color: var(--warning); }
 
-@keyframes pulse {
-  0%,
-  100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.5;
-    transform: scale(1.3);
-  }
-}
-
 /* ===== Bottom Bar ===== */
 #bottombar {
   display: flex;
@@ -459,6 +494,13 @@
 .log-line {
   padding: 1px 0;
   color: var(--text-secondary);
+  animation: slideUp 150ms ease;
+}
+
+.log-line:nth-last-child(-n+3) {
+  animation-name: slideUp, highlightFade;
+  animation-duration: 150ms, 2s;
+  animation-delay: 0s, 150ms;
 }
 
 /* ===== Context Menu ===== */
@@ -471,6 +513,8 @@
   box-shadow: var(--shadow);
   padding: 4px 0;
   min-width: 160px;
+  animation: scaleIn 120ms var(--ease-out);
+  transform-origin: top left;
 }
 
 .context-item {
@@ -562,16 +606,6 @@
 
 .modal-body {
   padding: 16px 20px 20px;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-@keyframes scaleIn {
-  from { opacity: 0; transform: scale(0.95); }
-  to { opacity: 1; transform: scale(1); }
 }
 
 /* ===== Form Controls ===== */

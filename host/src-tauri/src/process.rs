@@ -188,7 +188,7 @@ pub fn spawn_organizer(
     template: &str,
     dry_run: bool,
     cancel: Arc<AtomicBool>,
-) -> Result<(), String> {
+) -> Result<Vec<OrganizeItem>, String> {
     let mut cmd = Command::new(find_binary("audiobook-organizer"));
     cmd.arg(source)
         .arg(dest)
@@ -206,6 +206,8 @@ pub fn spawn_organizer(
         .spawn()
         .map_err(|e| format!("Failed to spawn organizer: {}", e))?;
 
+    let mut items = Vec::new();
+
     if let Some(stdout) = child.stdout.take() {
         let reader = std::io::BufReader::new(stdout);
         for line in reader.lines() {
@@ -213,7 +215,32 @@ pub fn spawn_organizer(
                 let _ = child.kill();
                 return Err("Cancelled".to_string());
             }
-            let _ = line;
+            let line = line.map_err(|e| format!("read error: {}", e))?;
+            if line.trim().is_empty() {
+                continue;
+            }
+            if let Ok(val) = serde_json::from_str::<serde_json::Value>(&line) {
+                match val.get("type").and_then(|v| v.as_str()) {
+                    Some("item") => {
+                        if let Some(data) = val.get("data") {
+                            let source = data.get("source").and_then(|v| v.as_str()).unwrap_or("");
+                            let dest = data.get("dest").and_then(|v| v.as_str()).unwrap_or("");
+                            if !source.is_empty() && !dest.is_empty() {
+                                items.push(OrganizeItem {
+                                    source: source.to_string(),
+                                    dest: dest.to_string(),
+                                });
+                            }
+                        }
+                    }
+                    Some("error") => {
+                        if let Some(msg) = val.get("message").and_then(|v| v.as_str()) {
+                            return Err(msg.to_string());
+                        }
+                    }
+                    _ => {}
+                }
+            }
         }
     }
 
@@ -221,5 +248,5 @@ pub fn spawn_organizer(
     if !status.success() {
         return Err("organizer failed".to_string());
     }
-    Ok(())
+    Ok(items)
 }

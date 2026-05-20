@@ -125,6 +125,37 @@ export default function MainPage() {
     }
   }, [])
 
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (checkedIds.length > 0) {
+          e.preventDefault()
+          handleRemove(checkedIds)
+        }
+      }
+      if (e.ctrlKey || e.metaKey) {
+        if (e.key === 'a') {
+          e.preventDefault()
+          if (selected.size === files.length && files.length > 0) {
+            setSelectAll(false)
+            setSelected(new Set())
+          } else {
+            setSelectAll(true)
+            setSelected(new Set(files.map(f => f.id)))
+          }
+        }
+        if (e.key === 'e') {
+          e.preventDefault()
+          handlePipeline()
+        }
+      }
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [checkedIds, files, selected, handleRemove, handlePipeline])
+
   const handleContext = useCallback((e: React.MouseEvent, fileId: number) => {
     e.preventDefault()
     setContextPos({ x: e.clientX, y: e.clientY })
@@ -183,11 +214,12 @@ export default function MainPage() {
     setShowOrganize(false)
     try {
       await ipc.organize(organizeIds, orgTemplate, orgDest, orgDryRun)
+      await refreshFiles()
       addLog(t(lang, 'organizeDone'))
     } catch (e) {
       addLog(`${t(lang, 'organizeError')}: ${e}`)
     }
-  }, [orgTemplate, orgDest, orgDryRun, organizeIds, addLog, lang])
+  }, [orgTemplate, orgDest, orgDryRun, organizeIds, addLog, lang, refreshFiles])
 
   const pickOrgDest = useCallback(async () => {
     const dir = await ipc.pickFolder()
