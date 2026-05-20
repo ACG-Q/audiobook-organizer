@@ -46,9 +46,9 @@ fn main() -> anyhow::Result<()> {
 
         let report = if let Some(n) = cli.threads {
             let pool = rayon::ThreadPoolBuilder::new().num_threads(n).build()?;
-            pool.install(
-                || organize_files(files, &cli.template, &cli.dest, cli.dry_run, cli.stream),
-            )?
+            pool.install(|| {
+                organize_files(files, &cli.template, &cli.dest, cli.dry_run, cli.stream)
+            })?
         } else {
             organize_files(files, &cli.template, &cli.dest, cli.dry_run, cli.stream)?
         };
@@ -85,7 +85,9 @@ fn translate(cmd: clap::Command, lang: &Lang) -> clap::Command {
                 a.help("预览模式：显示将要执行的操作但不实际移动")
             })
             .mut_arg("threads", |a| a.help("工作线程数"))
-            .mut_arg("stream", |a| a.help("启用 JSON Lines 流式输出，供上位机调用")),
+            .mut_arg("stream", |a| {
+                a.help("启用 JSON Lines 流式输出，供上位机调用")
+            }),
         Lang::En => cmd
             .about("Rename and organize audio files by template")
             .mut_arg("source", |a| a.help("Source directory"))

@@ -23,13 +23,28 @@ impl Serialize for AudioMetadata {
     {
         use serde::ser::SerializeMap;
         let mut map = serializer.serialize_map(None)?;
-        map.serialize_entry("artist", &self.artist.as_ref().map_or("unknown", |s| s.as_str()))?;
-        map.serialize_entry("title", &self.title.as_ref().map_or("unknown", |s| s.as_str()))?;
-        map.serialize_entry("album", &self.album.as_ref().map_or("unknown", |s| s.as_str()))?;
+        map.serialize_entry(
+            "artist",
+            &self.artist.as_ref().map_or("unknown", |s| s.as_str()),
+        )?;
+        map.serialize_entry(
+            "title",
+            &self.title.as_ref().map_or("unknown", |s| s.as_str()),
+        )?;
+        map.serialize_entry(
+            "album",
+            &self.album.as_ref().map_or("unknown", |s| s.as_str()),
+        )?;
         map.serialize_entry("track", &self.track.unwrap_or(0))?;
         map.serialize_entry("disc", &self.disc.unwrap_or(0))?;
-        map.serialize_entry("genre", &self.genre.as_ref().map_or("unknown", |s| s.as_str()))?;
-        map.serialize_entry("date", &self.date.as_ref().map_or("unknown", |s| s.as_str()))?;
+        map.serialize_entry(
+            "genre",
+            &self.genre.as_ref().map_or("unknown", |s| s.as_str()),
+        )?;
+        map.serialize_entry(
+            "date",
+            &self.date.as_ref().map_or("unknown", |s| s.as_str()),
+        )?;
         map.serialize_entry("duration", &self.duration.unwrap_or(0.0))?;
         map.serialize_entry("ext", &self.ext)?;
         map.serialize_entry("name", &self.name)?;
@@ -59,5 +74,3 @@ pub struct Transcript {
     pub segments: Vec<(f64, f64, String)>,
     pub language: Option<String>,
 }
-
-

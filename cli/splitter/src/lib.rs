@@ -6,7 +6,6 @@ use serde_json::json;
 
 mod encode;
 
-
 pub fn parse_time(s: &str) -> f64 {
     if let Ok(secs) = s.parse::<f64>() {
         return secs;
@@ -77,10 +76,7 @@ pub fn run_split(
     }
 
     if stream {
-        StreamEvent::Done {
-            summary: json!({}),
-        }
-        .emit();
+        StreamEvent::Done { summary: json!({}) }.emit();
     }
 
     Ok(())
@@ -133,8 +129,12 @@ fn get_video_info(video: &Path) -> anyhow::Result<serde_json::Value> {
         hint.with_extension(ext);
     }
 
-    let format = symphonia::default::get_probe()
-        .probe(&hint, mss, FormatOptions::default(), Default::default())?;
+    let format = symphonia::default::get_probe().probe(
+        &hint,
+        mss,
+        FormatOptions::default(),
+        Default::default(),
+    )?;
 
     let mi = format.media_info();
     let duration = (|| {
@@ -252,10 +252,7 @@ fn codec_id_name(params: &symphonia::core::codecs::CodecParameters) -> String {
 }
 
 fn output_format(output: &Path) -> &str {
-    output
-        .extension()
-        .and_then(|s| s.to_str())
-        .unwrap_or("wav")
+    output.extension().and_then(|s| s.to_str()).unwrap_or("wav")
 }
 
 fn transcode_segment(
@@ -278,8 +275,12 @@ fn transcode_segment(
         hint.with_extension(ext);
     }
 
-    let mut format = symphonia::default::get_probe()
-        .probe(&hint, mss, FormatOptions::default(), Default::default())?;
+    let mut format = symphonia::default::get_probe().probe(
+        &hint,
+        mss,
+        FormatOptions::default(),
+        Default::default(),
+    )?;
 
     let track = format
         .default_track(TrackType::Audio)
@@ -299,17 +300,21 @@ fn transcode_segment(
         .map_err(|e| anyhow::anyhow!("Failed to create decoder: {e}"))?;
 
     if let Some(s) = start {
-        let time = symphonia::core::units::Time::try_from_secs_f64(s)
-            .unwrap_or_default();
-        let _ = format.seek(SeekMode::Accurate, SeekTo::Time {
-            time,
-            track_id: Some(track_id),
-        });
+        let time = symphonia::core::units::Time::try_from_secs_f64(s).unwrap_or_default();
+        let _ = format.seek(
+            SeekMode::Accurate,
+            SeekTo::Time {
+                time,
+                track_id: Some(track_id),
+            },
+        );
     }
 
     let mut encoder = encode::create_encoder(output, &fmt)?;
     let start_sample = start.map(|s| (s * sample_rate as f64) as u64).unwrap_or(0);
-    let end_sample = end.map(|e| (e * sample_rate as f64) as u64).unwrap_or(u64::MAX);
+    let end_sample = end
+        .map(|e| (e * sample_rate as f64) as u64)
+        .unwrap_or(u64::MAX);
     let mut total_decoded: u64 = 0;
     let mut first_frame = true;
 
@@ -407,7 +412,11 @@ fn extract_full_audio(
     transcode_segment(video, &output, None, None)?;
 
     if stream {
-        StreamEvent::<serde_json::Value>::Progress { current: 1, total: 1 }.emit();
+        StreamEvent::<serde_json::Value>::Progress {
+            current: 1,
+            total: 1,
+        }
+        .emit();
     }
     Ok(())
 }
@@ -446,7 +455,11 @@ fn extract_audio_segment(
     transcode_segment(video, &output, Some(start), Some(end))?;
 
     if stream {
-        StreamEvent::<serde_json::Value>::Progress { current: 1, total: 1 }.emit();
+        StreamEvent::<serde_json::Value>::Progress {
+            current: 1,
+            total: 1,
+        }
+        .emit();
     }
     Ok(())
 }
@@ -468,7 +481,13 @@ fn split_by_chapters(
         let title = ch["title"].as_str().unwrap_or(&default_title);
         let safe_title: String = title
             .chars()
-            .map(|c| if c.is_ascii_alphanumeric() || c == '_' || c == '-' { c } else { '_' })
+            .map(|c| {
+                if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
+                    c
+                } else {
+                    '_'
+                }
+            })
             .collect();
         let output = out_dir.join(format!("{:02}_{safe_title}.{format}", i + 1));
 

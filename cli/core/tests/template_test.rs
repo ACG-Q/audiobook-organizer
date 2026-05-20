@@ -1,5 +1,5 @@
-use audiobook_organizer_core::AudioMetadata;
 use audiobook_organizer_core::render;
+use audiobook_organizer_core::AudioMetadata;
 
 #[test]
 fn test_basic_template_render() {
@@ -16,7 +16,10 @@ fn test_basic_template_render() {
 
 #[test]
 fn test_padding_format() {
-    let meta = AudioMetadata { track: Some(3), ..Default::default() };
+    let meta = AudioMetadata {
+        track: Some(3),
+        ..Default::default()
+    };
     let result = render("{{format track \"02\"}} - {{title}}", &meta).unwrap();
     assert_eq!(result, "03 - unknown");
 }

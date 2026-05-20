@@ -2,7 +2,10 @@ use std::path::PathBuf;
 
 #[test]
 fn test_parse_wav_metadata() {
-    let path = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/sample.wav"));
+    let path = PathBuf::from(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/sample.wav"
+    ));
     let meta = audiobook_scanner::read_metadata(&path).unwrap();
     assert_eq!(meta.ext, "wav");
     assert_eq!(meta.name, "sample");
@@ -11,7 +14,10 @@ fn test_parse_wav_metadata() {
 
 #[test]
 fn test_parse_missing_fields() {
-    let path = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/empty.wav"));
+    let path = PathBuf::from(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/empty.wav"
+    ));
     let meta = audiobook_scanner::read_metadata(&path).unwrap();
     assert_eq!(meta.ext, "wav");
     assert_eq!(meta.name, "empty");

@@ -42,22 +42,20 @@ pub fn organize_files(
                     report.success += 1;
                     report.moves.push((file.path.clone(), dest));
                 }
-                Err(e) if is_cross_device_error(&e) => {
-                    match std::fs::copy(&file.path, &dest) {
-                        Ok(_) => {
-                            let _ = std::fs::remove_file(&file.path);
-                            report.success += 1;
-                            report.moves.push((file.path.clone(), dest));
-                        }
-                        Err(copy_err) => {
-                            report.failed += 1;
-                            report.errors.push((
-                                file.path.clone(),
-                                format!("cross-device copy failed: {copy_err}"),
-                            ));
-                        }
+                Err(e) if is_cross_device_error(&e) => match std::fs::copy(&file.path, &dest) {
+                    Ok(_) => {
+                        let _ = std::fs::remove_file(&file.path);
+                        report.success += 1;
+                        report.moves.push((file.path.clone(), dest));
                     }
-                }
+                    Err(copy_err) => {
+                        report.failed += 1;
+                        report.errors.push((
+                            file.path.clone(),
+                            format!("cross-device copy failed: {copy_err}"),
+                        ));
+                    }
+                },
                 Err(e) => {
                     report.failed += 1;
                     report.errors.push((file.path.clone(), e.to_string()));

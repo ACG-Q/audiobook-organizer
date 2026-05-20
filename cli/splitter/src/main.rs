@@ -53,11 +53,15 @@ fn main() -> anyhow::Result<()> {
                 output_dir,
                 stream,
             } => audiobook_splitter::run_split(
-                video, chapters, segment, chunk_duration, format, output_dir, stream,
+                video,
+                chapters,
+                segment,
+                chunk_duration,
+                format,
+                output_dir,
+                stream,
             ),
-            Commands::Info { video, output } => {
-                audiobook_splitter::run_info(video, output)
-            }
+            Commands::Info { video, output } => audiobook_splitter::run_info(video, output),
         }
     })
 }
@@ -74,12 +78,8 @@ fn translate(cmd: clap::Command, lang: &Lang) -> clap::Command {
                         a.value_names(["开始", "结束"])
                             .help("按时间段拆分（格式: HH:MM:SS 或秒数）")
                     })
-                    .mut_arg("chunk_duration", |a| {
-                        a.help("按固定时长拆分（秒）")
-                    })
-                    .mut_arg("format", |a| {
-                        a.help("输出音频格式（mp3/wav/flac/m4a/ogg）")
-                    })
+                    .mut_arg("chunk_duration", |a| a.help("按固定时长拆分（秒）"))
+                    .mut_arg("format", |a| a.help("输出音频格式（mp3/wav/flac/m4a/ogg）"))
                     .mut_arg("output_dir", |a| {
                         a.help("输出目录（默认: video 同目录下的 split/）")
                     })
@@ -95,9 +95,7 @@ fn translate(cmd: clap::Command, lang: &Lang) -> clap::Command {
             .mut_subcommand("split", |s| {
                 s.about("Extract audio and split")
                     .mut_arg("video", |a| a.help("Video file path"))
-                    .mut_arg("chapters", |a| {
-                        a.help("Split by chapters")
-                    })
+                    .mut_arg("chapters", |a| a.help("Split by chapters"))
                     .mut_arg("segment", |a| {
                         a.value_names(["START", "END"])
                             .help("Split by time segment (format: HH:MM:SS or seconds)")

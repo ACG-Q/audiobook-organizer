@@ -1,2 +1,2 @@
 mod scan;
-pub use scan::{scan, read_metadata};
+pub use scan::{read_metadata, scan};

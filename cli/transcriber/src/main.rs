@@ -68,7 +68,12 @@ fn main() -> anyhow::Result<()> {
 }
 
 #[cfg(feature = "whisper-rs")]
-fn handle_transcribe(path: PathBuf, model: String, lang: String, stream: bool) -> anyhow::Result<()> {
+fn handle_transcribe(
+    path: PathBuf,
+    model: String,
+    lang: String,
+    stream: bool,
+) -> anyhow::Result<()> {
     let model_dir = dirs::data_dir()
         .unwrap_or_default()
         .join("audiobook-organizer/models");
@@ -187,7 +192,9 @@ fn translate(cmd: clap::Command, lang: &Lang) -> clap::Command {
             .mut_subcommand("transcribe", |s| {
                 s.about("转写音频文件")
                     .mut_arg("path", |a| a.help("音频文件路径"))
-                    .mut_arg("model", |a| a.help("Whisper 模型名称（默认: large-v3-turbo）"))
+                    .mut_arg("model", |a| {
+                        a.help("Whisper 模型名称（默认: large-v3-turbo）")
+                    })
                     .mut_arg("lang", |a| a.help("语言代码（默认: zh）"))
                     .mut_arg("stream", |a| a.help("启用 JSON Lines 流式输出"))
             })
@@ -209,7 +216,9 @@ fn translate(cmd: clap::Command, lang: &Lang) -> clap::Command {
             .mut_subcommand("transcribe", |s| {
                 s.about("Transcribe an audio file")
                     .mut_arg("path", |a| a.help("Audio file path"))
-                    .mut_arg("model", |a| a.help("Whisper model name (default: large-v3-turbo)"))
+                    .mut_arg("model", |a| {
+                        a.help("Whisper model name (default: large-v3-turbo)")
+                    })
                     .mut_arg("lang", |a| a.help("Language code (default: zh)"))
                     .mut_arg("stream", |a| a.help("Enable JSON Lines streaming output"))
             })

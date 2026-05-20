@@ -134,7 +134,8 @@ impl AudioEncoder for OggOpusEncoder {
             let input: Vec<f32> = frame.to_vec();
 
             let mut output = vec![0u8; 4096];
-            let encoded = encoder.encode(&input, frame_size / channels, &mut output)
+            let encoded = encoder
+                .encode(&input, frame_size / channels, &mut output)
                 .map_err(|e| anyhow::anyhow!("Opus encode failed: {e}"))?;
 
             let pcm_samples = (frame_size / channels) as u64;
@@ -146,7 +147,14 @@ impl AudioEncoder for OggOpusEncoder {
                 0
             };
 
-            write_ogg_page(file, &output[..encoded], 0, granule_pos as i64, false, false)?;
+            write_ogg_page(
+                file,
+                &output[..encoded],
+                0,
+                granule_pos as i64,
+                false,
+                false,
+            )?;
             offset += frame_size;
         }
 

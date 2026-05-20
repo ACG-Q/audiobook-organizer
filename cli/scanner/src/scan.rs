@@ -35,7 +35,11 @@ pub fn scan(path: &Path) -> anyhow::Result<Vec<AudioFile>> {
 }
 
 pub fn read_metadata(path: &Path) -> anyhow::Result<AudioMetadata> {
-    let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("").to_string();
+    let stem = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .to_string();
     let ext = path
         .extension()
         .and_then(|s| s.to_str())
@@ -54,8 +58,8 @@ pub fn read_metadata(path: &Path) -> anyhow::Result<AudioMetadata> {
     let mut hint = symphonia::core::formats::probe::Hint::new();
     hint.with_extension(&ext);
 
-    if let Ok(mut format) = symphonia::default::get_probe()
-        .probe(&hint, mss, Default::default(), Default::default())
+    if let Ok(mut format) =
+        symphonia::default::get_probe().probe(&hint, mss, Default::default(), Default::default())
     {
         if let Some(track) = format.tracks().first() {
             let sample_rate = track
@@ -64,9 +68,7 @@ pub fn read_metadata(path: &Path) -> anyhow::Result<AudioMetadata> {
                 .and_then(|cp| cp.audio())
                 .and_then(|a| a.sample_rate)
                 .unwrap_or(1);
-            meta.duration = track
-                .num_frames
-                .map(|f| f as f64 / sample_rate as f64);
+            meta.duration = track.num_frames.map(|f| f as f64 / sample_rate as f64);
         }
         if let Some(metadata) = format.metadata().current() {
             for tag in &metadata.media.tags {
