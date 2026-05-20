@@ -7,19 +7,18 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: cli
       - name: Install zig
-        uses: goto-bus-stop/setup-zig@v2
+        uses: mlugg/setup-zig@v2
       - name: Install cargo-zigbuild
         uses: taiki-e/install-action@v2
         with:
@@ -77,7 +76,7 @@ jobs:
             tar czf /tmp/audiobook-cli-$t.tar.gz audiobook-scanner.exe audiobook-organizer.exe audiobook-transcriber.exe audiobook-splitter.exe
             cd -
           done
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: packages
           path: /tmp/audiobook-cli-*.tar.gz
@@ -88,11 +87,11 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: packages
       - name: Create Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: audiobook-cli-*.tar.gz
           generate_release_notes: true

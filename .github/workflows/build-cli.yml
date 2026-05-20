@@ -10,13 +10,12 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
@@ -36,13 +35,13 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: cli
       - name: Install zig
-        uses: goto-bus-stop/setup-zig@v2
+        uses: mlugg/setup-zig@v2
       - name: Install cargo-zigbuild
         uses: taiki-e/install-action@v2
         with:
@@ -73,7 +72,7 @@ jobs:
           WIN32_WINNT: "0x0601"
         run: |
           cargo zigbuild --release --target x86_64-pc-windows-gnu -p audiobook-scanner -p audiobook-organizer -p audiobook-transcriber -p audiobook-splitter
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: audiobook-binaries
           path: cli/target/*/release/audiobook-*
