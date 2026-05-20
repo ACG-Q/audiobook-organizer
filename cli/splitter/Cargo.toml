@@ -26,5 +26,6 @@ symphonia = { version = "0.6", features = [
 ] }
 hound = "3"
 flac-codec = "1.3"
+[target.'cfg(target_arch = "x86_64")'.dependencies]
 opus-rs = "0.1"
 ogg = "0.9"
