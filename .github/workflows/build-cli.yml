@@ -54,8 +54,12 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: cli
+      - name: Install zig
+        uses: goto-bus-stop/setup-zig@v2
       - name: Install cargo-zigbuild
-        run: cargo install cargo-zigbuild
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-zigbuild
       - name: Add target
         run: rustup target add ${{ matrix.cfg.target }}
       - name: Build
