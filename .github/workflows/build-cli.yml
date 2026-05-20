@@ -38,6 +38,19 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        cfg:
+          - target: x86_64-unknown-linux-gnu
+          - target: x86_64-unknown-linux-musl
+          - target: i686-unknown-linux-gnu
+          - target: aarch64-unknown-linux-gnu
+          - target: x86_64-pc-windows-gnu
+          - target: x86_64-pc-windows-gnu
+            win7: true
+          - target: i686-pc-windows-gnu
+          - target: x86_64-apple-darwin
+          - target: aarch64-apple-darwin
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
@@ -52,34 +65,16 @@ jobs:
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-zigbuild
-      - name: Add all targets
-        run: |
-          rustup target add \
-            x86_64-unknown-linux-gnu \
-            x86_64-unknown-linux-musl \
-            i686-unknown-linux-gnu \
-            aarch64-unknown-linux-gnu \
-            x86_64-pc-windows-gnu \
-            i686-pc-windows-gnu \
-            x86_64-apple-darwin \
-            aarch64-apple-darwin
-      - name: Build all targets
-        working-directory: cli
-        run: |
-          targets="x86_64-unknown-linux-gnu x86_64-unknown-linux-musl i686-unknown-linux-gnu aarch64-unknown-linux-gnu x86_64-pc-windows-gnu i686-pc-windows-gnu x86_64-apple-darwin aarch64-apple-darwin"
-          for t in $targets; do
-            echo "::group::Building $t"
-            cargo zigbuild --release --target "$t" -p audiobook-scanner -p audiobook-organizer -p audiobook-transcriber -p audiobook-splitter
-            echo "::endgroup::"
-          done
-      - name: Build Win7 variant
+      - name: Add target
+        run: rustup target add ${{ matrix.cfg.target }}
+      - name: Build
         working-directory: cli
         env:
-          WIN32_WINNT: "0x0601"
-        run: |
-          cargo zigbuild --release --target x86_64-pc-windows-gnu -p audiobook-scanner -p audiobook-organizer -p audiobook-transcriber -p audiobook-splitter
+          WIN32_WINNT: ${{ matrix.cfg.win7 && '0x0601' || '' }}
+        run: cargo zigbuild --release --target ${{ matrix.cfg.target }} -p audiobook-scanner -p audiobook-organizer -p audiobook-transcriber -p audiobook-splitter
       - uses: actions/upload-artifact@v6
         with:
-          name: audiobook-binaries
-          path: cli/target/*/release/audiobook-*
+          name: ${{ matrix.cfg.win7 && format('{0}-win7', matrix.cfg.target) || matrix.cfg.target }}
+          path: |
+            cli/target/${{ matrix.cfg.target }}/release/audiobook-*
           compression-level: 0
