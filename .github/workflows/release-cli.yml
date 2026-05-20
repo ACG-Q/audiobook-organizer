@@ -13,16 +13,18 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        target:
-          - x86_64-unknown-linux-gnu
-          - x86_64-unknown-linux-musl
-          - i686-unknown-linux-gnu
-          - aarch64-unknown-linux-gnu
-          - x86_64-pc-windows-gnu
-          - i686-pc-windows-gnu
-          - aarch64-pc-windows-msvc
-          - x86_64-apple-darwin
-          - aarch64-apple-darwin
+        cfg:
+          - target: x86_64-unknown-linux-gnu
+          - target: x86_64-unknown-linux-musl
+          - target: i686-unknown-linux-gnu
+          - target: aarch64-unknown-linux-gnu
+          - target: x86_64-pc-windows-gnu
+          - target: x86_64-pc-windows-gnu
+            win7: true
+          - target: i686-pc-windows-gnu
+          - target: aarch64-pc-windows-msvc
+          - target: x86_64-apple-darwin
+          - target: aarch64-apple-darwin
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -32,28 +34,30 @@ jobs:
       - name: Install cargo-zigbuild
         run: cargo install cargo-zigbuild
       - name: Add target
-        run: rustup target add ${{ matrix.target }}
+        run: rustup target add ${{ matrix.cfg.target }}
       - name: Build
-        run: cargo zigbuild --release --target ${{ matrix.target }} -p audiobook-scanner -p audiobook-organizer -p audiobook-transcriber -p audiobook-splitter
+        run: cargo zigbuild --release --target ${{ matrix.cfg.target }} -p audiobook-scanner -p audiobook-organizer -p audiobook-transcriber -p audiobook-splitter
+        env:
+          WIN32_WINNT: ${{ matrix.cfg.win7 && '0x0601' || '' }}
       - name: Package
         shell: pwsh
         run: |
-          $target = "${{ matrix.target }}"
-          $dir = "cli/target/$target/release"
-          if ($target -match "windows") {
-            Compress-Archive -Path "$dir/audiobook-scanner.exe","$dir/audiobook-organizer.exe","$dir/audiobook-transcriber.exe","$dir/audiobook-splitter.exe" -DestinationPath "/tmp/audiobook-cli-$target.zip"
+          $t = "${{ matrix.cfg.target }}"
+          $suffix = "${{ matrix.cfg.win7 && '-win7' || '' }}"
+          $dir = "cli/target/$t/release"
+          if ($t -match "windows") {
+            Compress-Archive -Path "$dir/audiobook-scanner.exe","$dir/audiobook-organizer.exe","$dir/audiobook-transcriber.exe","$dir/audiobook-splitter.exe" -DestinationPath "/tmp/audiobook-cli-$t$suffix.zip"
           } else {
-            tar czf "/tmp/audiobook-cli-$target.tar.gz" -C "$dir" audiobook-scanner audiobook-organizer audiobook-transcriber audiobook-splitter
+            tar czf "/tmp/audiobook-cli-$t$suffix.tar.gz" -C "$dir" audiobook-scanner audiobook-organizer audiobook-transcriber audiobook-splitter
           }
       - uses: actions/upload-artifact@v4
         with:
-          name: package-${{ matrix.target }}
-          path: /tmp/audiobook-cli-${{ matrix.target }}.*
-      - name: Upload binaries
-        uses: actions/upload-artifact@v4
+          name: package-${{ matrix.cfg.target }}${{ matrix.cfg.win7 && '-win7' || '' }}
+          path: /tmp/audiobook-cli-${{ matrix.cfg.target }}${{ matrix.cfg.win7 && '-win7' || '' }}.*
+      - uses: actions/upload-artifact@v4
         with:
-          name: bin-${{ matrix.target }}
-          path: cli/target/${{ matrix.target }}/release/audiobook-*
+          name: bin-${{ matrix.cfg.target }}${{ matrix.cfg.win7 && '-win7' || '' }}
+          path: cli/target/${{ matrix.cfg.target }}/release/audiobook-*
           compression-level: 0
 
   release:
