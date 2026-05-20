@@ -11,20 +11,6 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        cfg:
-          - target: x86_64-unknown-linux-gnu
-          - target: x86_64-unknown-linux-musl
-          - target: i686-unknown-linux-gnu
-          - target: aarch64-unknown-linux-gnu
-          - target: x86_64-pc-windows-gnu
-          - target: x86_64-pc-windows-gnu
-            win7: true
-          - target: i686-pc-windows-gnu
-          - target: aarch64-pc-windows-msvc
-          - target: x86_64-apple-darwin
-          - target: aarch64-apple-darwin
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -37,32 +23,63 @@ jobs:
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-zigbuild
-      - name: Add target
-        run: rustup target add ${{ matrix.cfg.target }}
-      - name: Build
-        run: cargo zigbuild --release --target ${{ matrix.cfg.target }} -p audiobook-scanner -p audiobook-organizer -p audiobook-transcriber -p audiobook-splitter
-        env:
-          WIN32_WINNT: ${{ matrix.cfg.win7 && '0x0601' || '' }}
-      - name: Package
-        shell: pwsh
+      - name: Add all targets
         run: |
-          $t = "${{ matrix.cfg.target }}"
-          $suffix = "${{ matrix.cfg.win7 && '-win7' || '' }}"
-          $dir = "cli/target/$t/release"
-          if ($t -match "windows") {
-            Compress-Archive -Path "$dir/audiobook-scanner.exe","$dir/audiobook-organizer.exe","$dir/audiobook-transcriber.exe","$dir/audiobook-splitter.exe" -DestinationPath "/tmp/audiobook-cli-$t$suffix.zip"
-          } else {
-            tar czf "/tmp/audiobook-cli-$t$suffix.tar.gz" -C "$dir" audiobook-scanner audiobook-organizer audiobook-transcriber audiobook-splitter
-          }
+          rustup target add \
+            x86_64-unknown-linux-gnu \
+            x86_64-unknown-linux-musl \
+            i686-unknown-linux-gnu \
+            aarch64-unknown-linux-gnu \
+            x86_64-pc-windows-gnu \
+            i686-pc-windows-gnu \
+            aarch64-pc-windows-msvc \
+            x86_64-apple-darwin \
+            aarch64-apple-darwin
+      - name: Build all targets
+        run: |
+          targets="x86_64-unknown-linux-gnu x86_64-unknown-linux-musl i686-unknown-linux-gnu aarch64-unknown-linux-gnu x86_64-pc-windows-gnu i686-pc-windows-gnu aarch64-pc-windows-msvc x86_64-apple-darwin aarch64-apple-darwin"
+          for t in $targets; do
+            echo "::group::Building $t"
+            cargo zigbuild --release --target "$t" -p audiobook-scanner -p audiobook-organizer -p audiobook-transcriber -p audiobook-splitter
+            echo "::endgroup::"
+          done
+      - name: Build Win7 variant
+        env:
+          WIN32_WINNT: "0x0601"
+        run: |
+          cargo zigbuild --release --target x86_64-pc-windows-gnu -p audiobook-scanner -p audiobook-organizer -p audiobook-transcriber -p audiobook-splitter
+      - name: Backup regular Windows before Win7 overwrite
+        run: |
+          mkdir -p /tmp/regular-win
+          cp cli/target/x86_64-pc-windows-gnu/release/audiobook-*.exe /tmp/regular-win/
+      - name: Package
+        run: |
+          targets="x86_64-unknown-linux-gnu x86_64-unknown-linux-musl i686-unknown-linux-gnu aarch64-unknown-linux-gnu x86_64-apple-darwin aarch64-apple-darwin"
+          for t in $targets; do
+            cd cli/target/$t/release
+            tar czf /tmp/audiobook-cli-$t.tar.gz audiobook-scanner audiobook-organizer audiobook-transcriber audiobook-splitter
+            cd -
+          done
+          # Windows (regular)
+          cd /tmp/regular-win
+          tar czf /tmp/audiobook-cli-x86_64-pc-windows-gnu.tar.gz audiobook-scanner.exe audiobook-organizer.exe audiobook-transcriber.exe audiobook-splitter.exe
+          cd -
+          # Windows (Win7)
+          cd cli/target/x86_64-pc-windows-gnu/release
+          tar czf /tmp/audiobook-cli-x86_64-pc-windows-gnu-win7.tar.gz audiobook-scanner.exe audiobook-organizer.exe audiobook-transcriber.exe audiobook-splitter.exe
+          cd -
+          # i686-windows
+          cd cli/target/i686-pc-windows-gnu/release
+          tar czf /tmp/audiobook-cli-i686-pc-windows-gnu.tar.gz audiobook-scanner.exe audiobook-organizer.exe audiobook-transcriber.exe audiobook-splitter.exe
+          cd -
+          # aarch64-windows
+          cd cli/target/aarch64-pc-windows-msvc/release
+          tar czf /tmp/audiobook-cli-aarch64-pc-windows-msvc.tar.gz audiobook-scanner.exe audiobook-organizer.exe audiobook-transcriber.exe audiobook-splitter.exe
+          cd -
       - uses: actions/upload-artifact@v4
         with:
-          name: package-${{ matrix.cfg.target }}${{ matrix.cfg.win7 && '-win7' || '' }}
-          path: /tmp/audiobook-cli-${{ matrix.cfg.target }}${{ matrix.cfg.win7 && '-win7' || '' }}.*
-      - uses: actions/upload-artifact@v4
-        with:
-          name: bin-${{ matrix.cfg.target }}${{ matrix.cfg.win7 && '-win7' || '' }}
-          path: cli/target/${{ matrix.cfg.target }}/release/audiobook-*
-          compression-level: 0
+          name: packages
+          path: /tmp/audiobook-cli-*.tar.gz
 
   release:
     needs: build
@@ -71,8 +88,10 @@ jobs:
       contents: write
     steps:
       - uses: actions/download-artifact@v4
+        with:
+          name: packages
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: package-*/*
+          files: audiobook-cli-*.tar.gz
           generate_release_notes: true
