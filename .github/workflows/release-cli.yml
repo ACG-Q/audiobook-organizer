@@ -32,13 +32,12 @@ jobs:
             aarch64-unknown-linux-gnu \
             x86_64-pc-windows-gnu \
             i686-pc-windows-gnu \
-            aarch64-pc-windows-gnu \
             x86_64-apple-darwin \
             aarch64-apple-darwin
       - name: Build all targets
         working-directory: cli
         run: |
-          targets="x86_64-unknown-linux-gnu x86_64-unknown-linux-musl i686-unknown-linux-gnu aarch64-unknown-linux-gnu x86_64-pc-windows-gnu i686-pc-windows-gnu aarch64-pc-windows-gnu x86_64-apple-darwin aarch64-apple-darwin"
+          targets="x86_64-unknown-linux-gnu x86_64-unknown-linux-musl i686-unknown-linux-gnu aarch64-unknown-linux-gnu x86_64-pc-windows-gnu i686-pc-windows-gnu x86_64-apple-darwin aarch64-apple-darwin"
           for t in $targets; do
             echo "::group::Building $t"
             cargo zigbuild --release --target "$t" -p audiobook-scanner -p audiobook-organizer -p audiobook-transcriber -p audiobook-splitter
@@ -72,7 +71,7 @@ jobs:
           tar czf /tmp/audiobook-cli-x86_64-pc-windows-gnu-win7.tar.gz audiobook-scanner.exe audiobook-organizer.exe audiobook-transcriber.exe audiobook-splitter.exe
           cd -
           # Windows (other archs)
-          for t in i686-pc-windows-gnu aarch64-pc-windows-gnu; do
+          for t in i686-pc-windows-gnu; do
             cd cli/target/$t/release
             tar czf /tmp/audiobook-cli-$t.tar.gz audiobook-scanner.exe audiobook-organizer.exe audiobook-transcriber.exe audiobook-splitter.exe
             cd -
