@@ -51,35 +51,46 @@ pub fn read_metadata(path: &Path) -> anyhow::Result<AudioMetadata> {
 
     let file = std::fs::File::open(path)?;
     let mss = symphonia::core::io::MediaSourceStream::new(Box::new(file), Default::default());
-    let mut hint = symphonia::core::probe::Hint::new();
+    let mut hint = symphonia::core::formats::probe::Hint::new();
     hint.with_extension(&ext);
-    let format_opts = symphonia::core::formats::FormatOptions::default();
-    let meta_opts = symphonia::core::meta::MetadataOptions::default();
 
-    if let Ok(probed) = symphonia::default::get_probe().format(&hint, mss, &format_opts, &meta_opts)
+    if let Ok(mut format) = symphonia::default::get_probe()
+        .probe(&hint, mss, Default::default(), Default::default())
     {
-        let mut format = probed.format;
         if let Some(track) = format.tracks().first() {
-            let codec_params = &track.codec_params;
-            meta.duration = codec_params
-                .n_frames
-                .map(|f| f as f64 / codec_params.sample_rate.unwrap_or(1) as f64);
+            let sample_rate = track
+                .codec_params
+                .as_ref()
+                .and_then(|cp| cp.audio())
+                .and_then(|a| a.sample_rate)
+                .unwrap_or(1);
+            meta.duration = track
+                .num_frames
+                .map(|f| f as f64 / sample_rate as f64);
         }
         if let Some(metadata) = format.metadata().current() {
-            for tag in metadata.tags() {
-                match tag.key.as_str() {
-                    "title" => meta.title = Some(tag.value.to_string()),
-                    "artist" => meta.artist = Some(tag.value.to_string()),
-                    "album" => meta.album = Some(tag.value.to_string()),
+            for tag in &metadata.media.tags {
+                let val = match &tag.raw.value {
+                    symphonia::core::meta::RawValue::String(s) => s.to_string(),
+                    symphonia::core::meta::RawValue::StringList(list) => list.join(", "),
+                    symphonia::core::meta::RawValue::UnsignedInt(n) => n.to_string(),
+                    symphonia::core::meta::RawValue::SignedInt(n) => n.to_string(),
+                    symphonia::core::meta::RawValue::Float(f) => f.to_string(),
+                    _ => continue,
+                };
+                match tag.raw.key.as_str() {
+                    "title" => meta.title = Some(val),
+                    "artist" => meta.artist = Some(val),
+                    "album" => meta.album = Some(val),
                     "track" => {
-                        if let Ok(s) = tag.value.to_string().parse::<u32>() {
+                        if let Ok(s) = val.parse::<u32>() {
                             meta.track = Some(s);
                         }
                     }
-                    "date" => meta.date = Some(tag.value.to_string()),
-                    "genre" => meta.genre = Some(tag.value.to_string()),
+                    "date" => meta.date = Some(val),
+                    "genre" => meta.genre = Some(val),
                     "disc" | "disk" => {
-                        if let Ok(s) = tag.value.to_string().parse::<u32>() {
+                        if let Ok(s) = val.parse::<u32>() {
                             meta.disc = Some(s);
                         }
                     }

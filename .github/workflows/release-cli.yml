@@ -13,122 +13,82 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Build cross image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: cross/Dockerfile.linux
-          tags: audiobook-cross:linux
-          load: true
-          cache-from: type=gha,scope=cross-linux
-          cache-to: type=gha,mode=max,scope=cross-linux
       - uses: dtolnay/rust-toolchain@stable
-      - name: Install cross
-        run: cargo install cross --git https://github.com/cross-rs/cross
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: cli
       - name: Build
         working-directory: cli
-        run: cross build --release --target x86_64-unknown-linux-gnu -p audiobook-scanner -p audiobook-organizer -p audiobook-transcriber -p audiobook-splitter
+        run: cargo build --release -p audiobook-scanner -p audiobook-organizer -p audiobook-transcriber -p audiobook-splitter
       - name: Package
         run: |
-          cd cli/target/x86_64-unknown-linux-gnu/release
+          cd cli/target/release
           tar czf audiobook-cli-linux.tar.gz audiobook-scanner audiobook-organizer audiobook-transcriber audiobook-splitter
       - uses: actions/upload-artifact@v4
         with:
           name: audiobook-cli-linux
-          path: cli/target/x86_64-unknown-linux-gnu/release/audiobook-cli-linux.tar.gz
+          path: cli/target/release/audiobook-cli-linux.tar.gz
 
   build-windows:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Build cross image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: cross/Dockerfile.windows
-          tags: audiobook-cross:windows
-          load: true
-          cache-from: type=gha,scope=cross-windows
-          cache-to: type=gha,mode=max,scope=cross-windows
       - uses: dtolnay/rust-toolchain@stable
-      - name: Install cross
-        run: cargo install cross --git https://github.com/cross-rs/cross
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: cli
       - name: Build
         working-directory: cli
-        run: cross build --release --target x86_64-pc-windows-gnu -p audiobook-scanner -p audiobook-organizer -p audiobook-transcriber -p audiobook-splitter
+        run: cargo build --release -p audiobook-scanner -p audiobook-organizer -p audiobook-transcriber -p audiobook-splitter
       - name: Package
         shell: pwsh
         run: |
-          cd cli/target/x86_64-pc-windows-gnu/release
+          cd cli/target/release
           Compress-Archive -Path audiobook-scanner.exe,audiobook-organizer.exe,audiobook-transcriber.exe,audiobook-splitter.exe -DestinationPath audiobook-cli-windows.zip
       - uses: actions/upload-artifact@v4
         with:
           name: audiobook-cli-windows
-          path: cli/target/x86_64-pc-windows-gnu/release/audiobook-cli-windows.zip
+          path: cli/target/release/audiobook-cli-windows.zip
 
   build-macos-x86_64:
-    runs-on: ubuntu-latest
+    runs-on: macos-13
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Build cross image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: cross/Dockerfile.macos
-          tags: audiobook-cross:macos
-          load: true
-          cache-from: type=gha,scope=cross-macos
-          cache-to: type=gha,mode=max,scope=cross-macos
       - uses: dtolnay/rust-toolchain@stable
-      - name: Install cross
-        run: cargo install cross --git https://github.com/cross-rs/cross
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: cli
       - name: Build
         working-directory: cli
-        run: cross build --release --target x86_64-apple-darwin -p audiobook-scanner -p audiobook-organizer -p audiobook-transcriber -p audiobook-splitter
+        run: cargo build --release -p audiobook-scanner -p audiobook-organizer -p audiobook-transcriber -p audiobook-splitter
       - name: Package
         run: |
-          cd cli/target/x86_64-apple-darwin/release
+          cd cli/target/release
           tar czf audiobook-cli-x86_64-apple-darwin.tar.gz audiobook-scanner audiobook-organizer audiobook-transcriber audiobook-splitter
       - uses: actions/upload-artifact@v4
         with:
           name: audiobook-cli-x86_64-apple-darwin
-          path: cli/target/x86_64-apple-darwin/release/audiobook-cli-x86_64-apple-darwin.tar.gz
+          path: cli/target/release/audiobook-cli-x86_64-apple-darwin.tar.gz
 
   build-macos-aarch64:
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Build cross image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: cross/Dockerfile.macos-aarch64
-          tags: audiobook-cross:macos-aarch64
-          load: true
-          cache-from: type=gha,scope=cross-macos-aarch64
-          cache-to: type=gha,mode=max,scope=cross-macos-aarch64
       - uses: dtolnay/rust-toolchain@stable
-      - name: Install cross
-        run: cargo install cross --git https://github.com/cross-rs/cross
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: cli
       - name: Build
         working-directory: cli
-        run: cross build --release --target aarch64-apple-darwin -p audiobook-scanner -p audiobook-organizer -p audiobook-transcriber -p audiobook-splitter
+        run: cargo build --release -p audiobook-scanner -p audiobook-organizer -p audiobook-transcriber -p audiobook-splitter
       - name: Package
         run: |
-          cd cli/target/aarch64-apple-darwin/release
+          cd cli/target/release
           tar czf audiobook-cli-aarch64-apple-darwin.tar.gz audiobook-scanner audiobook-organizer audiobook-transcriber audiobook-splitter
       - uses: actions/upload-artifact@v4
         with:
           name: audiobook-cli-aarch64-apple-darwin
-          path: cli/target/aarch64-apple-darwin/release/audiobook-cli-aarch64-apple-darwin.tar.gz
+          path: cli/target/release/audiobook-cli-aarch64-apple-darwin.tar.gz
 
   release:
     needs:

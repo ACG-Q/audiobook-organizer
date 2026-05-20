@@ -4,6 +4,9 @@ use audiobook_organizer_core::i18n::{detect_lang, Lang};
 use audiobook_organizer_core::stream::{Emit, StreamEvent};
 use serde_json::json;
 
+mod encode;
+
+
 pub fn parse_time(s: &str) -> f64 {
     if let Ok(secs) = s.parse::<f64>() {
         return secs;
@@ -118,52 +121,112 @@ pub fn run_info(video: PathBuf, output: String) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn init_ffmpeg() {
-    use std::sync::OnceLock;
-    static INIT: OnceLock<Result<(), ffmpeg_next::Error>> = OnceLock::new();
-    let _ = INIT.get_or_init(|| ffmpeg_next::init());
-}
-
 fn get_video_info(video: &Path) -> anyhow::Result<serde_json::Value> {
-    init_ffmpeg();
+    use symphonia::core::formats::probe::Hint;
+    use symphonia::core::formats::FormatOptions;
+    use symphonia::core::io::MediaSourceStream;
 
-    let ictx = ffmpeg_next::format::input(&video)
-        .map_err(|e| anyhow::anyhow!("Failed to open video: {e}"))?;
+    let file = std::fs::File::open(video)?;
+    let mss = MediaSourceStream::new(Box::new(file), Default::default());
+    let mut hint = Hint::new();
+    if let Some(ext) = video.extension().and_then(|s| s.to_str()) {
+        hint.with_extension(ext);
+    }
 
-    let duration = ictx.duration() as f64 / ffmpeg_next::ffi::AV_TIME_BASE as f64;
+    let format = symphonia::default::get_probe()
+        .probe(&hint, mss, FormatOptions::default(), Default::default())?;
 
-    let chapters: Vec<serde_json::Value> = ictx
-        .chapters()
-        .map(|ch| {
-            let tb = ch.time_base();
-            let start = ch.start() as f64 * tb.numerator() as f64 / tb.denominator() as f64;
-            let end = ch.end() as f64 * tb.numerator() as f64 / tb.denominator() as f64;
-            json!({
-                "title": ch.metadata().get("title").unwrap_or_default(),
-                "start": start,
-                "end": end,
-                "duration": end - start,
+    let mi = format.media_info();
+    let duration = (|| {
+        let d = mi.duration?;
+        let tb = mi.time_base?;
+        Some(d.get() as f64 * tb.numer.get() as f64 / tb.denom.get() as f64)
+    })()
+    .unwrap_or(0.0);
+
+    use symphonia::core::meta::ChapterGroupItem;
+    fn extract_chapters(items: &[ChapterGroupItem]) -> Vec<serde_json::Value> {
+        items
+            .iter()
+            .flat_map(|item| match item {
+                ChapterGroupItem::Chapter(ch) => {
+                    let start_sec = ch.start_time.as_secs_f64();
+                    let end_sec = ch.end_time.map(|t| t.as_secs_f64()).unwrap_or(0.0);
+                    let title = ch
+                        .tags
+                        .iter()
+                        .find(|t| t.raw.key.eq_ignore_ascii_case("title"))
+                        .and_then(|t| {
+                            if let symphonia::core::meta::RawValue::String(s) = &t.raw.value {
+                                Some(s.as_str())
+                            } else {
+                                None
+                            }
+                        })
+                        .unwrap_or("");
+                    vec![json!({
+                        "title": title,
+                        "start": start_sec,
+                        "end": end_sec,
+                        "duration": end_sec - start_sec,
+                    })]
+                }
+                ChapterGroupItem::Group(g) => extract_chapters(&g.items),
             })
-        })
-        .collect();
+            .collect()
+    }
+    let chapters = format
+        .chapters()
+        .map(|cg| extract_chapters(&cg.items))
+        .unwrap_or_default();
 
-    let streams: Vec<serde_json::Value> = ictx
-        .streams()
-        .map(|s| {
-            let codec =
-                ffmpeg_next::codec::context::Context::from_parameters(s.parameters()).ok();
-            let codec_name = codec.as_ref().map(|c| c.id().name()).map(|s| s.to_string());
-            let codec_long = codec.as_ref().map(|c| format!("{:?}", c.medium()));
-            let med_type = format!("{:?}", s.parameters().medium());
+    let streams: Vec<serde_json::Value> = format
+        .tracks()
+        .iter()
+        .map(|t| {
+            let codec_type = t.codec_params.as_ref().map_or("Unknown".to_string(), |cp| {
+                if cp.is_audio() {
+                    "Audio".to_string()
+                } else if cp.is_video() {
+                    "Video".to_string()
+                } else {
+                    "Subtitle".to_string()
+                }
+            });
+            let codec_name = t
+                .codec_params
+                .as_ref()
+                .map(|cp| codec_id_name(cp))
+                .unwrap_or_else(|| "unknown".to_string());
+            let sample_rate = t
+                .codec_params
+                .as_ref()
+                .and_then(|cp| cp.audio())
+                .and_then(|a| a.sample_rate)
+                .unwrap_or(0);
+            let ch = t
+                .codec_params
+                .as_ref()
+                .and_then(|cp| cp.audio())
+                .and_then(|a| a.channels.as_ref().map(|c| c.count() as u16))
+                .unwrap_or(0);
+            let duration_str = match t.duration {
+                Some(d) => format!("{d}"),
+                None => "unknown".to_string(),
+            };
             json!({
-                "index": s.index(),
-                "codec_type": med_type,
+                "index": t.id,
+                "codec_type": codec_type,
                 "codec_name": codec_name,
-                "codec_long_name": codec_long,
-                "time_base": s.time_base().to_string(),
-                "start_time": s.start_time(),
-                "duration": s.duration(),
-                "frames": s.frames(),
+                "time_base": if let Some(tb) = &t.time_base {
+                    format!("{}/{}", tb.numer.get(), tb.denom.get())
+                } else {
+                    "unknown".to_string()
+                },
+                "start_time": t.start_ts.get(),
+                "duration": duration_str,
+                "sample_rate": sample_rate,
+                "channels": ch,
             })
         })
         .collect();
@@ -175,25 +238,24 @@ fn get_video_info(video: &Path) -> anyhow::Result<serde_json::Value> {
     }))
 }
 
-fn drain_encoder_packets(
-    encoder: &mut ffmpeg_next::codec::encoder::audio::Encoder,
-    octx: &mut ffmpeg_next::format::context::Output,
-    out_tb: ffmpeg_next::Rational,
-) -> anyhow::Result<()> {
-    let mut out_pkt = ffmpeg_next::packet::Packet::empty();
-    loop {
-        match encoder.receive_packet(&mut out_pkt) {
-            Ok(()) => {
-                out_pkt.set_stream(0);
-                out_pkt.rescale_ts(encoder.time_base(), out_tb);
-                out_pkt.write_interleaved(octx)?;
-            }
-            Err(ffmpeg_next::Error::Other { errno }) if errno == libc::EAGAIN => {
-                return Ok(());
-            }
-            Err(e) => return Err(anyhow::anyhow!("Encode error: {e}")),
+fn codec_id_name(params: &symphonia::core::codecs::CodecParameters) -> String {
+    use symphonia::core::codecs::audio::CODEC_ID_NULL_AUDIO;
+    if let Some(audio) = params.audio() {
+        if audio.codec == CODEC_ID_NULL_AUDIO {
+            "unknown".to_string()
+        } else {
+            format!("{:?}", audio.codec)
         }
+    } else {
+        "unknown".to_string()
     }
+}
+
+fn output_format(output: &Path) -> &str {
+    output
+        .extension()
+        .and_then(|s| s.to_str())
+        .unwrap_or("wav")
 }
 
 fn transcode_segment(
@@ -202,118 +264,120 @@ fn transcode_segment(
     start: Option<f64>,
     end: Option<f64>,
 ) -> anyhow::Result<()> {
-    use ffmpeg_next::{codec, encoder, format, frame, media, packet, ChannelLayout};
+    use symphonia::core::codecs::audio::AudioDecoderOptions;
+    use symphonia::core::formats::probe::Hint;
+    use symphonia::core::formats::{FormatOptions, SeekMode, SeekTo, TrackType};
+    use symphonia::core::io::MediaSourceStream;
 
-    init_ffmpeg();
+    let fmt = output_format(output).to_string();
 
-    let mut ictx = format::input(&input)?;
-    let input_stream = ictx
-        .streams()
-        .best(media::Type::Audio)
-        .ok_or_else(|| anyhow::anyhow!("No audio stream found"))?;
-    let audio_index = input_stream.index();
+    let file = std::fs::File::open(input)?;
+    let mss = MediaSourceStream::new(Box::new(file), Default::default());
+    let mut hint = Hint::new();
+    if let Some(ext) = input.extension().and_then(|s| s.to_str()) {
+        hint.with_extension(ext);
+    }
 
-    let mut decoder =
-        codec::context::Context::from_parameters(input_stream.parameters())?
-            .decoder()
-            .audio()?;
+    let mut format = symphonia::default::get_probe()
+        .probe(&hint, mss, FormatOptions::default(), Default::default())?;
 
-    let in_tb = input_stream.time_base();
+    let track = format
+        .default_track(TrackType::Audio)
+        .ok_or_else(|| anyhow::anyhow!("No audio track found"))?;
+    let track_id = track.id;
+
+    let audio_params = track
+        .codec_params
+        .as_ref()
+        .and_then(|cp| cp.audio())
+        .cloned()
+        .ok_or_else(|| anyhow::anyhow!("No audio codec parameters"))?;
+    let sample_rate = audio_params.sample_rate.unwrap_or(44100);
+
+    let mut decoder = symphonia::default::get_codecs()
+        .make_audio_decoder(&audio_params, &AudioDecoderOptions::default())
+        .map_err(|e| anyhow::anyhow!("Failed to create decoder: {e}"))?;
 
     if let Some(s) = start {
-        let seek_ts = (s * ffmpeg_next::ffi::AV_TIME_BASE as f64) as i64;
-        let _ = ictx.seek(seek_ts, ..seek_ts);
+        let time = symphonia::core::units::Time::try_from_secs_f64(s)
+            .unwrap_or_default();
+        let _ = format.seek(SeekMode::Accurate, SeekTo::Time {
+            time,
+            track_id: Some(track_id),
+        });
     }
 
-    let mut octx = format::output(&output)?;
+    let mut encoder = encode::create_encoder(output, &fmt)?;
+    let start_sample = start.map(|s| (s * sample_rate as f64) as u64).unwrap_or(0);
+    let end_sample = end.map(|e| (e * sample_rate as f64) as u64).unwrap_or(u64::MAX);
+    let mut total_decoded: u64 = 0;
+    let mut first_frame = true;
 
-    let codec_id = octx.format().codec(&output, media::Type::Audio);
-    let codec = encoder::find(codec_id)
-        .ok_or_else(|| anyhow::anyhow!("Encoder not found"))?
-        .audio()?;
+    loop {
+        let packet = match format.next_packet() {
+            Ok(Some(pkt)) => pkt,
+            Ok(None) => break,
+            Err(e) => return Err(anyhow::anyhow!("Read error: {e}")),
+        };
 
-    let global = octx
-        .format()
-        .flags()
-        .contains(format::flag::Flags::GLOBAL_HEADER);
-
-    let mut ost = octx.add_stream(codec)?;
-
-    {
-        let mut enc_ctx = codec::context::Context::from_parameters(ost.parameters())?
-            .encoder()
-            .audio()?;
-
-        enc_ctx.set_rate(decoder.rate() as i32);
-
-        let ch_layout = codec
-            .channel_layouts()
-            .map(|cls| cls.best(decoder.channel_layout().channels()))
-            .unwrap_or(ChannelLayout::STEREO);
-        enc_ctx.set_channel_layout(ch_layout);
-
-        let dst_fmt = codec
-            .formats()
-            .ok_or_else(|| anyhow::anyhow!("No formats supported by encoder"))?
-            .next()
-            .unwrap_or(decoder.format());
-        enc_ctx.set_format(dst_fmt);
-
-        if global {
-            enc_ctx.set_flags(codec::flag::Flags::GLOBAL_HEADER);
-        }
-
-        enc_ctx.open_as(codec)?;
-        ost.set_parameters(&enc_ctx);
-    }
-
-    let mut encoder = codec::context::Context::from_parameters(ost.parameters())?
-        .encoder()
-        .audio()?;
-
-    let out_tb = ost.time_base();
-
-    octx.set_metadata(ictx.metadata().to_owned());
-    octx.write_header()?;
-
-    for (stream, packet) in ictx.packets() {
-        if stream.index() != audio_index {
+        if packet.track_id != track_id {
             continue;
         }
 
-        if let Some(e) = end {
-            if let Some(pts) = packet.pts() {
-                let t = pts as f64 * in_tb.numerator() as f64 / in_tb.denominator() as f64;
-                if t >= e {
-                    break;
-                }
-            }
-        }
+        match decoder.decode(&packet) {
+            Ok(decoded) => {
+                let n_frames = decoded.frames();
+                let channels_count = decoded.spec().channels().count();
+                let frame_samples = n_frames as u64;
 
-        let _ = decoder.send_packet(&packet);
-        let mut dec_frame = frame::Audio::empty();
-        loop {
-            match decoder.receive_frame(&mut dec_frame) {
-                Ok(()) => {
-                    let _ = encoder.send_frame(&dec_frame);
-                    drain_encoder_packets(&mut encoder, &mut octx, out_tb)?;
+                if n_frames == 0 {
+                    continue;
                 }
-                Err(_) => break,
+
+                let mut samples = Vec::with_capacity(n_frames * channels_count);
+                decoded.copy_to_vec_interleaved(&mut samples);
+
+                if first_frame {
+                    first_frame = false;
+                    if start_sample > total_decoded {
+                        let skip = (start_sample - total_decoded).min(frame_samples);
+                        let keep_start = skip as usize * channels_count;
+                        if keep_start < samples.len() {
+                            let chunk = &samples[keep_start..];
+                            encoder.write_header(sample_rate, channels_count as u16)?;
+                            encoder.encode_chunk(chunk)?;
+                            total_decoded += frame_samples;
+                        } else {
+                            total_decoded += frame_samples;
+                            continue;
+                        }
+                    } else {
+                        encoder.write_header(sample_rate, channels_count as u16)?;
+                        encoder.encode_chunk(&samples)?;
+                        total_decoded += frame_samples;
+                    }
+                } else {
+                    if total_decoded + frame_samples > end_sample {
+                        let keep = end_sample.saturating_sub(total_decoded) as usize;
+                        let keep_end = keep * channels_count;
+                        let keep_end = keep_end.min(samples.len());
+                        if keep_end > 0 {
+                            encoder.encode_chunk(&samples[..keep_end])?;
+                        }
+                        break;
+                    }
+                    encoder.encode_chunk(&samples)?;
+                    total_decoded += frame_samples;
+                }
             }
+            Err(symphonia::core::errors::Error::DecodeError(_)) => {
+                continue;
+            }
+            Err(e) => return Err(anyhow::anyhow!("Decode error: {e}")),
         }
     }
 
-    let _ = decoder.send_packet(&packet::Packet::empty());
-    let mut dec_frame = frame::Audio::empty();
-    while decoder.receive_frame(&mut dec_frame).is_ok() {
-        let _ = encoder.send_frame(&dec_frame);
-        drain_encoder_packets(&mut encoder, &mut octx, out_tb)?;
-    }
-
-    let _ = encoder.send_frame(&frame::Audio::empty());
-    drain_encoder_packets(&mut encoder, &mut octx, out_tb)?;
-
-    octx.write_trailer()?;
+    encoder.finalize()?;
     Ok(())
 }
 
@@ -343,7 +407,7 @@ fn extract_full_audio(
     transcode_segment(video, &output, None, None)?;
 
     if stream {
-        StreamEvent::Progress { current: 1, total: 1 }.emit();
+        StreamEvent::<serde_json::Value>::Progress { current: 1, total: 1 }.emit();
     }
     Ok(())
 }
@@ -382,7 +446,7 @@ fn extract_audio_segment(
     transcode_segment(video, &output, Some(start), Some(end))?;
 
     if stream {
-        StreamEvent::Progress { current: 1, total: 1 }.emit();
+        StreamEvent::<serde_json::Value>::Progress { current: 1, total: 1 }.emit();
     }
     Ok(())
 }
@@ -426,7 +490,7 @@ fn split_by_chapters(
         }
 
         if stream {
-            StreamEvent::Progress {
+            StreamEvent::<serde_json::Value>::Progress {
                 current: i + 1,
                 total,
             }
@@ -474,7 +538,7 @@ fn split_by_duration(
         }
 
         if stream {
-            StreamEvent::Progress {
+            StreamEvent::<serde_json::Value>::Progress {
                 current: i + 1,
                 total: total_chunks,
             }
