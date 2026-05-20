@@ -32,70 +32,38 @@ jobs:
         working-directory: cli
         run: cargo test
 
-  build-linux:
+  build:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target:
+          - x86_64-unknown-linux-gnu
+          - x86_64-unknown-linux-musl
+          - i686-unknown-linux-gnu
+          - aarch64-unknown-linux-gnu
+          - x86_64-pc-windows-gnu
+          - i686-pc-windows-gnu
+          - aarch64-pc-windows-msvc
+          - x86_64-apple-darwin
+          - aarch64-apple-darwin
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: cli
+      - name: Install cargo-zigbuild
+        run: cargo install cargo-zigbuild
+      - name: Add target
+        run: rustup target add ${{ matrix.target }}
       - name: Build
-        working-directory: cli
-        run: cargo build --release -p audiobook-scanner -p audiobook-organizer -p audiobook-transcriber -p audiobook-splitter
+        run: cargo zigbuild --release --target ${{ matrix.target }} -p audiobook-scanner -p audiobook-organizer -p audiobook-transcriber -p audiobook-splitter
       - uses: actions/upload-artifact@v4
         with:
-          name: audiobook-cli-linux
-          path: cli/target/release/audiobook-*
-          compression-level: 0
-
-  build-windows:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: cli
-      - name: Build
-        working-directory: cli
-        run: cargo build --release -p audiobook-scanner -p audiobook-organizer -p audiobook-transcriber -p audiobook-splitter
-      - uses: actions/upload-artifact@v4
-        with:
-          name: audiobook-cli-windows
-          path: cli/target/release/audiobook-*.exe
-          compression-level: 0
-
-  build-macos-x86_64:
-    runs-on: macos-13
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: cli
-      - name: Build
-        working-directory: cli
-        run: cargo build --release -p audiobook-scanner -p audiobook-organizer -p audiobook-transcriber -p audiobook-splitter
-      - uses: actions/upload-artifact@v4
-        with:
-          name: audiobook-cli-x86_64-apple-darwin
-          path: cli/target/release/audiobook-*
-          compression-level: 0
-
-  build-macos-aarch64:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: cli
-      - name: Build
-        working-directory: cli
-        run: cargo build --release -p audiobook-scanner -p audiobook-organizer -p audiobook-transcriber -p audiobook-splitter
-      - uses: actions/upload-artifact@v4
-        with:
-          name: audiobook-cli-aarch64-apple-darwin
-          path: cli/target/release/audiobook-*
+          name: ${{ matrix.target }}
+          path: |
+            cli/target/${{ matrix.target }}/release/audiobook-scanner*
+            cli/target/${{ matrix.target }}/release/audiobook-organizer*
+            cli/target/${{ matrix.target }}/release/audiobook-transcriber*
+            cli/target/${{ matrix.target }}/release/audiobook-splitter*
           compression-level: 0
