@@ -59,6 +59,7 @@ jobs:
             x86_64-apple-darwin \
             aarch64-apple-darwin
       - name: Build all targets
+        working-directory: cli
         run: |
           targets="x86_64-unknown-linux-gnu x86_64-unknown-linux-musl i686-unknown-linux-gnu aarch64-unknown-linux-gnu x86_64-pc-windows-gnu i686-pc-windows-gnu aarch64-pc-windows-msvc x86_64-apple-darwin aarch64-apple-darwin"
           for t in $targets; do
@@ -67,6 +68,7 @@ jobs:
             echo "::endgroup::"
           done
       - name: Build Win7 variant
+        working-directory: cli
         env:
           WIN32_WINNT: "0x0601"
         run: |

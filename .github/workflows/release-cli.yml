@@ -36,6 +36,7 @@ jobs:
             x86_64-apple-darwin \
             aarch64-apple-darwin
       - name: Build all targets
+        working-directory: cli
         run: |
           targets="x86_64-unknown-linux-gnu x86_64-unknown-linux-musl i686-unknown-linux-gnu aarch64-unknown-linux-gnu x86_64-pc-windows-gnu i686-pc-windows-gnu aarch64-pc-windows-msvc x86_64-apple-darwin aarch64-apple-darwin"
           for t in $targets; do
@@ -43,19 +44,21 @@ jobs:
             cargo zigbuild --release --target "$t" -p audiobook-scanner -p audiobook-organizer -p audiobook-transcriber -p audiobook-splitter
             echo "::endgroup::"
           done
+      - name: Backup regular Windows (before Win7 overwrite)
+        working-directory: cli
+        run: |
+          mkdir -p /tmp/regular-win
+          cp target/x86_64-pc-windows-gnu/release/audiobook-*.exe /tmp/regular-win/
       - name: Build Win7 variant
+        working-directory: cli
         env:
           WIN32_WINNT: "0x0601"
         run: |
           cargo zigbuild --release --target x86_64-pc-windows-gnu -p audiobook-scanner -p audiobook-organizer -p audiobook-transcriber -p audiobook-splitter
-      - name: Backup regular Windows before Win7 overwrite
-        run: |
-          mkdir -p /tmp/regular-win
-          cp cli/target/x86_64-pc-windows-gnu/release/audiobook-*.exe /tmp/regular-win/
       - name: Package
         run: |
-          targets="x86_64-unknown-linux-gnu x86_64-unknown-linux-musl i686-unknown-linux-gnu aarch64-unknown-linux-gnu x86_64-apple-darwin aarch64-apple-darwin"
-          for t in $targets; do
+          # Linux / macOS
+          for t in x86_64-unknown-linux-gnu x86_64-unknown-linux-musl i686-unknown-linux-gnu aarch64-unknown-linux-gnu x86_64-apple-darwin aarch64-apple-darwin; do
             cd cli/target/$t/release
             tar czf /tmp/audiobook-cli-$t.tar.gz audiobook-scanner audiobook-organizer audiobook-transcriber audiobook-splitter
             cd -
@@ -64,18 +67,16 @@ jobs:
           cd /tmp/regular-win
           tar czf /tmp/audiobook-cli-x86_64-pc-windows-gnu.tar.gz audiobook-scanner.exe audiobook-organizer.exe audiobook-transcriber.exe audiobook-splitter.exe
           cd -
-          # Windows (Win7)
+          # Windows (Win7, from target dir which was just rebuilt)
           cd cli/target/x86_64-pc-windows-gnu/release
           tar czf /tmp/audiobook-cli-x86_64-pc-windows-gnu-win7.tar.gz audiobook-scanner.exe audiobook-organizer.exe audiobook-transcriber.exe audiobook-splitter.exe
           cd -
-          # i686-windows
-          cd cli/target/i686-pc-windows-gnu/release
-          tar czf /tmp/audiobook-cli-i686-pc-windows-gnu.tar.gz audiobook-scanner.exe audiobook-organizer.exe audiobook-transcriber.exe audiobook-splitter.exe
-          cd -
-          # aarch64-windows
-          cd cli/target/aarch64-pc-windows-msvc/release
-          tar czf /tmp/audiobook-cli-aarch64-pc-windows-msvc.tar.gz audiobook-scanner.exe audiobook-organizer.exe audiobook-transcriber.exe audiobook-splitter.exe
-          cd -
+          # Windows (other archs)
+          for t in i686-pc-windows-gnu aarch64-pc-windows-msvc; do
+            cd cli/target/$t/release
+            tar czf /tmp/audiobook-cli-$t.tar.gz audiobook-scanner.exe audiobook-organizer.exe audiobook-transcriber.exe audiobook-splitter.exe
+            cd -
+          done
       - uses: actions/upload-artifact@v4
         with:
           name: packages
