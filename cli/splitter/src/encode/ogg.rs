@@ -141,11 +141,7 @@ impl AudioEncoder for OggOpusEncoder {
             let pcm_samples = (frame_size / channels) as u64;
             self.total_samples += pcm_samples;
 
-            let granule_pos = if self.total_samples > self.pre_skip as u64 {
-                self.total_samples - self.pre_skip as u64
-            } else {
-                0
-            };
+            let granule_pos = self.total_samples.saturating_sub(self.pre_skip as u64);
 
             write_ogg_page(
                 file,
@@ -165,11 +161,7 @@ impl AudioEncoder for OggOpusEncoder {
         // Write remaining (if any) as partial frame
         if let Some(file) = self.file.as_mut() {
             // Final OGG page with EOS
-            let eos_granule = if self.total_samples > self.pre_skip as u64 {
-                self.total_samples - self.pre_skip as u64
-            } else {
-                0
-            };
+            let eos_granule = self.total_samples.saturating_sub(self.pre_skip as u64);
             write_ogg_page(file, &[], 0, eos_granule as i64, false, true)?;
         }
         self.file = None;

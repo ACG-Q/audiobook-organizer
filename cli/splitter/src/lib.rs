@@ -196,7 +196,7 @@ fn get_video_info(video: &Path) -> anyhow::Result<serde_json::Value> {
             let codec_name = t
                 .codec_params
                 .as_ref()
-                .map(|cp| codec_id_name(cp))
+                .map(codec_id_name)
                 .unwrap_or_else(|| "unknown".to_string());
             let sample_rate = t
                 .codec_params
