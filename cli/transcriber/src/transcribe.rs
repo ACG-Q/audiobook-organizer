@@ -30,17 +30,6 @@ impl WhisperContext {
     }
 }
 
-impl WhisperContext {
-    pub fn from_path<P: AsRef<std::path::Path>>(path: P) -> Result<Self> {
-        Ok(Self {
-            inner: std::sync::Arc::new(whisper_rs::WhisperContext::new_with_params(
-                path.as_ref(),
-                whisper_rs::WhisperContextParameters::default(),
-            )?),
-        })
-    }
-}
-
 pub fn transcribe<P: AsRef<std::path::Path>>(
     ctx: &WhisperContext,
     audio_path: P,
