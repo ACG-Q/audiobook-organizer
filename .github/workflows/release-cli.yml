@@ -34,6 +34,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: cli
+      - name: Install LLVM/Clang for bindgen
+        run: sudo apt-get update && sudo apt-get install -y libclang-dev
       - name: Install zig
         uses: mlugg/setup-zig@v2
       - name: Install cargo-zigbuild
@@ -42,11 +44,16 @@ jobs:
           tool: cargo-zigbuild
       - name: Add target
         run: rustup target add ${{ matrix.cfg.target }}
-      - name: Build
+      - name: Build (without transcriber)
         working-directory: cli
         env:
           WIN32_WINNT: ${{ matrix.cfg.win7 && '0x0601' || '' }}
-        run: cargo zigbuild --release --target ${{ matrix.cfg.target }} -p audiobook-scanner -p audiobook-organizer -p audiobook-transcriber -p audiobook-splitter
+        run: cargo zigbuild --release --target ${{ matrix.cfg.target }} -p audiobook-scanner -p audiobook-organizer -p audiobook-splitter
+      - name: Build transcriber (with whisper-rs)
+        working-directory: cli
+        env:
+          WIN32_WINNT: ${{ matrix.cfg.win7 && '0x0601' || '' }}
+        run: cargo zigbuild --release --target ${{ matrix.cfg.target }} -p audiobook-transcriber --features whisper-rs
       - name: Package
         shell: pwsh
         run: |
