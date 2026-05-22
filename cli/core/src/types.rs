@@ -68,7 +68,7 @@ pub struct RenameReport {
     pub moves: Vec<(PathBuf, PathBuf)>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, serde::Serialize)]
 pub struct Transcript {
     pub text: String,
     pub segments: Vec<(f64, f64, String)>,
