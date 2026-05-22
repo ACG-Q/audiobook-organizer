@@ -5,9 +5,29 @@ use whisper_rs::{
 
 pub type Result<T> = std::result::Result<T, WhisperError>;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct WhisperContext {
     inner: std::sync::Arc<whisper_rs::WhisperContext>,
+}
+
+impl std::fmt::Debug for WhisperContext {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WhisperContext").finish()
+    }
+}
+
+impl WhisperContext {
+    pub fn from_path<P: AsRef<std::path::Path>>(path: P) -> Result<Self> {
+        let path_str = path.as_ref().to_string_lossy().to_string();
+        let ctx = whisper_rs::WhisperContext::new_with_params(
+            &path_str,
+            whisper_rs::WhisperContextParameters::default(),
+        )
+        .map_err(|e| WhisperError::InferenceFailed(e.to_string()))?;
+        Ok(Self {
+            inner: std::sync::Arc::new(ctx),
+        })
+    }
 }
 
 impl WhisperContext {
