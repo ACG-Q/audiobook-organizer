@@ -79,6 +79,7 @@ jobs:
         working-directory: cli
         env:
           WIN32_WINNT: ${{ matrix.cfg.win7 && '0x0601' || '' }}
+          WHISPER_NO_ACCELERATE: 1
         run: cargo zigbuild --release --target ${{ matrix.cfg.target }} -p audiobook-transcriber --features whisper-rs
       - uses: actions/upload-artifact@v6
         with:
