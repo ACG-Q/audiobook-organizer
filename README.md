@@ -11,7 +11,7 @@ audiobook-organizer/
 │   ├── scanner/           音频文件元数据扫描
 │   ├── organizer/         按模板重命名/归类
 │   ├── transcriber/       Whisper 语音转文字
-│   └── splitter/          ffmpeg 视频音频提取与分割
+│   └── splitter/          音频提取与分割
 ├── host/                  桌面 GUI（Tauri 上位机）
 │   ├── src/               Rust 后端
 │   └── frontend/          前端（HTML/CSS/JS）
@@ -21,7 +21,6 @@ audiobook-organizer/
 ## 前置条件
 
 - Rust 1.75+
-- ffmpeg + ffprobe（splitter 需要，需在 PATH 中）
 - 所有 CLI 二进制文件需在 PATH 中（供上位机调用）
 
 ## 构建
@@ -44,6 +43,17 @@ cargo build --release -p audiobook-scanner -p audiobook-organizer -p audiobook-t
 | **splitter** | 从视频提取音频并按章节/时长分割 | `splitter split video.mp4 --chapters --format mp3` |
 
 所有 CLI 工具支持 `--stream` 参数输出 JSON Lines 格式，供上位机集成。
+
+### 平台支持
+
+| 工具 | Linux | Windows | macOS |
+|------|-------|---------|-------|
+| scanner | ✅ | ✅ | ✅ |
+| organizer | ✅ | ✅ | ✅ |
+| splitter | ✅ | ✅ | ✅ |
+| transcriber | ✅ | ✅ | ❌\* |
+
+\* `audiobook-transcriber` 在 macOS 目标上跳过编译。`whisper-rs-sys` 内部链接了 `Accelerate.framework`，CI 在 Linux 上交叉编译 macOS 时无法获得此框架。macOS 用户可在本机自行编译（系统自带 Accelerate）。
 
 ### AUDIOBOOK_LANG 环境变量
 
